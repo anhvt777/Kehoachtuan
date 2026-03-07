@@ -1,24 +1,11 @@
-# Kehoachtuan - Theo dõi & Phân công công việc (GitHub Pages)
+# Kehoachtuan (v5.0.0)
 
-## 1) Chạy local (mỗi máy 1 dữ liệu)
-- Mặc định `Storage mode = local`
-- Dữ liệu lưu trong trình duyệt (localStorage)
+## Chạy local
+- Storage mode = local (mỗi thiết bị 1 dữ liệu)
 
-## 2) Chạy realtime (nhiều người dùng chung) với Supabase
-### Bước A: tạo bảng
-- Supabase → SQL Editor → chạy `supabase.sql`
+## Chạy realtime với Supabase
+1) Supabase → SQL Editor → chạy `supabase.sql`
+2) Test nhanh: Table editor → tasks → RLS: Disable (tạm thời)
+3) Trên web (mỗi thiết bị): Danh mục → Lưu trữ → Storage mode = supabase → dán URL + anon key → Lưu danh mục
 
-### Bước B: tạm test nhanh
-- Table editor → tasks → RLS: **Disable** (tạm thời)
-
-### Bước C: cấu hình trên web (mỗi thiết bị)
-- Bấm **Danh mục** → tab **Lưu trữ**
-- Storage mode = **supabase**
-- Dán Supabase URL + anon key
-- Lưu danh mục
-- Thêm 1 công việc thử trên điện thoại → máy quản lý sẽ thấy sau vài giây (polling).
-
-## 3) Xuất báo cáo tuần
-- Bấm **Xuất báo cáo tuần** → **Xuất Excel/CSV tuần**
-- Nếu CDN SheetJS bị chặn, hệ thống sẽ tự xuất CSV.
-
+Gợi ý: nếu cache cũ, mở link có `?v=5.0.0` hoặc Ctrl+F5.

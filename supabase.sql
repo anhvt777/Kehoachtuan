@@ -29,11 +29,9 @@ create table if not exists public.tasks (
   updated_at timestamptz not null default now()
 );
 
--- Optional index for queries
 create index if not exists tasks_week_start_idx on public.tasks (week_start);
 create index if not exists tasks_owner_id_idx on public.tasks (owner_id);
 
--- Optional: keep updated_at fresh when row updates (if you update via SQL)
 create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$
 begin
@@ -49,5 +47,5 @@ for each row execute function public.set_updated_at();
 
 -- RLS (optional)
 -- alter table public.tasks enable row level security;
--- Example policy (allow all for anon) - NOT recommended for production
+-- Example policy (allow all for anon) - NOT recommended for production:
 -- create policy "anon_all" on public.tasks for all using (true) with check (true);

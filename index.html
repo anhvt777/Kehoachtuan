@@ -1,317 +1,236 @@
 <!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=v4.1">
+  <link rel="stylesheet" href="styles.css?v=5.0.0">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="title">Theo dõi &amp; Phân công công việc</div>
-      <div class="subtitle">Kế hoạch tuần • giao việc • theo dõi tiến độ</div>
-    </div>
-
-    <div class="controls">
-      <label class="ctrl">
-        <span>Tuần</span>
-        <input id="weekPicker" type="date" />
-      </label>
-
-      <label class="ctrl">
-        <span>Tôi là</span>
-        <select id="mePicker"></select>
-      </label>
-
-      <button id="btnAdd" class="btn primary">+ Thêm việc</button>
-
-      <div class="menu">
-        <button id="btnExport" class="btn">Xuất báo cáo tuần</button>
-        <div class="menu-pop" id="exportMenu" hidden>
-          <button class="menu-item" id="btnExportWeek">Xuất Excel/CSV tuần</button>
-          <button class="menu-item" id="btnExportJson">Export JSON (backup)</button>
-          <label class="menu-item file">
-            Import JSON
-            <input id="fileImportJson" type="file" accept="application/json" />
-          </label>
+  <div class="container">
+    <div class="header">
+      <div class="hleft">
+        <h1>Theo dõi & Phân công công việc</h1>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • (v5.0.0)</div>
+      </div>
+      <div class="hright">
+        <div class="pill">
+          <label>Tuần</label>
+          <input id="weekPicker" type="date"/>
+        </div>
+        <div class="pill">
+          <label>Tôi là</label>
+          <select id="mePicker"></select>
+        </div>
+        <button class="btn primary" id="btnAdd">+ Thêm việc</button>
+        <button class="btn" id="btnExport">Xuất báo cáo tuần</button>
+        <button class="btn" id="btnLists">Danh mục</button>
+        <div class="syncBox">
+          <div class="syncTag" title="Chế độ lưu trữ và thời gian đồng bộ">
+            <span class="dot" id="syncDot"></span>
+            <span id="syncText">local • chưa đồng bộ</span>
+          </div>
         </div>
       </div>
-
-      <button id="btnCatalog" class="btn">Danh mục</button>
     </div>
-  </header>
 
-  <main class="wrap">
-    <section class="cards">
-      <div class="card">
-        <div class="card-label">Tổng việc</div>
-        <div class="card-value" id="sumTotal">0</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Hoàn thành</div>
-        <div class="card-value" id="sumDone">0</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Quá hạn</div>
-        <div class="card-value" id="sumOverdue">0</div>
-      </div>
-      <div class="card">
-        <div class="card-label">% hoàn thành</div>
-        <div class="card-value" id="sumPct">0%</div>
-      </div>
-      <div class="card sync">
-        <div class="card-label">Đồng bộ</div>
-        <div class="card-value" id="syncStatus">local</div>
-        <div class="card-sub" id="syncHint">Mỗi máy 1 dữ liệu</div>
-      </div>
-    </section>
+    <div class="grid4">
+      <div class="card"><div class="k">Tổng việc</div><div class="v" id="sumTotal">0</div></div>
+      <div class="card"><div class="k">Hoàn thành</div><div class="v" id="sumDone">0</div></div>
+      <div class="card"><div class="k">Quá hạn</div><div class="v" id="sumOverdue">0</div></div>
+      <div class="card"><div class="k">% hoàn thành</div><div class="v" id="sumPct">0%</div></div>
+    </div>
 
-    <section class="filters">
+    <div class="filters">
       <select id="filterAssignee"></select>
       <select id="filterStatus"></select>
       <select id="filterGroup"></select>
-
-      <label class="chk">
-        <input id="filterOverdue" type="checkbox" />
-        <span>Chỉ quá hạn</span>
-      </label>
-
-      <button id="btnClearFilter" class="btn">Xoá lọc</button>
-    </section>
-
-    <div class="hint">
-      Gợi ý: Việc chưa <b>Done</b> và <b>CarryOver=Y</b> sẽ tự hiển thị ở tuần hiện tại. Hàng quá hạn tự tô đỏ. Ngày hiển thị: <b>dd/mm/yyyy</b>.
+      <label class="chk"><input type="checkbox" id="filterOverdue"/> Chỉ quá hạn</label>
+      <button class="btn" id="btnClearFilter">Xoá lọc</button>
     </div>
 
-    <section class="table-wrap">
-      <table class="tbl">
+    <div class="note">
+      Gợi ý: Việc <b>chưa Done</b> và <b>CarryOver=Y</b> sẽ tự hiển thị ở tuần hiện tại. Hàng quá hạn tự tô đỏ. Định dạng ngày hiển thị: <b>dd/mm/yyyy</b>.
+      <br/>Lưu ý: GitHub Pages là web tĩnh. Nếu bạn cần nhiều người cập nhật chung “real-time”, hãy chọn <b>Storage mode = Supabase</b> trong Danh mục → Lưu trữ.
+    </div>
+
+    <div class="tableWrap">
+      <table>
         <thead>
           <tr>
-            <th class="col-id">ID</th>
-            <th class="col-group">Nhóm công việc</th>
-            <th class="col-title">Công việc / Hoạt động</th>
-            <th class="col-date">Deadline</th>
-            <th class="col-owner">CB đầu mối</th>
-            <th class="col-status">Trạng thái</th>
-            <th class="col-note">Kết quả / Ghi chú</th>
-            <th class="col-actions">Tác vụ</th>
-          </tr>
-          <tr class="subhead">
-            <th></th>
-            <th colspan="2">
-              <span class="pill">KPI</span> <span id="subKpi">—</span>
-              <span class="pill">Metric</span> <span id="subMetric">—</span>
-            </th>
-            <th colspan="2">
-              <span class="pill">Commit</span> <span id="subCommit">—</span>
-              <span class="pill">Actual</span> <span id="subActual">—</span>
-            </th>
-            <th colspan="3">
-              <span class="pill">Priority</span> <span id="subPriority">—</span>
-              <span class="pill">CarryOver</span> <span id="subCarry">—</span>
-              <span class="pill">Giao bởi</span> <span id="subGiver">—</span>
-            </th>
+            <th style="width:70px">ID</th>
+            <th>Nhóm công việc</th>
+            <th>Công việc / Hoạt động</th>
+            <th style="width:140px">Deadline</th>
+            <th style="width:180px">CB đầu mối</th>
+            <th style="width:130px">Trạng thái</th>
+            <th>Kết quả / Ghi chú</th>
+            <th style="width:150px">Tác vụ</th>
           </tr>
         </thead>
         <tbody id="tasksTbody">
-          <tr><td colspan="8" class="empty">Chưa có công việc trong tuần này. Bấm “+ Thêm việc”.</td></tr>
+          <tr><td colspan="8" style="color:var(--muted);padding:18px">Đang tải...</td></tr>
         </tbody>
       </table>
-    </section>
-
-    <footer class="footer">
-      Lưu ý: GitHub Pages là web tĩnh. Muốn <b>7 nhân viên cập nhật chung realtime</b> → vào <b>Danh mục</b> chọn <b>Storage mode = supabase</b> và nhập URL/anon key.
-    </footer>
-  </main>
-
-  <!-- Modal: Task -->
-  <div id="modalTask" class="modal" hidden>
-    <div class="modal-card">
-      <div class="modal-head">
-        <div class="modal-title" id="taskModalTitle">Thêm công việc</div>
-        <button class="icon-btn" data-close="modalTask" aria-label="Close">×</button>
-      </div>
-      <div class="modal-body">
-        <input id="fmId" type="hidden" />
-
-        <div class="grid2">
-          <label>
-            <span>Nhóm công việc *</span>
-            <select id="fmGroup"></select>
-          </label>
-          <label>
-            <span>CB đầu mối *</span>
-            <select id="fmAssignee"></select>
-          </label>
-        </div>
-
-        <label>
-          <span>Công việc / Hoạt động *</span>
-          <input id="fmTask" type="text" placeholder="Ví dụ: Gọi 10 KH tiềm năng, hoàn thiện 2 hồ sơ..." />
-        </label>
-
-        <div class="grid3">
-          <label>
-            <span>Deadline *</span>
-            <input id="fmDeadline" type="date" />
-          </label>
-          <label>
-            <span>Trạng thái *</span>
-            <select id="fmStatus"></select>
-          </label>
-          <label>
-            <span>Priority</span>
-            <select id="fmPriority"></select>
-          </label>
-        </div>
-
-        <div class="grid2">
-          <label>
-            <span>KPI (tuỳ chọn)</span>
-            <select id="fmKpi"></select>
-          </label>
-          <label>
-            <span>Output metric</span>
-            <select id="fmMetric"></select>
-          </label>
-        </div>
-
-        <div class="grid2">
-          <label>
-            <span>CarryOver</span>
-            <div class="radio-row">
-              <label class="radio"><input type="radio" name="carry" id="fmCarryY" value="Y" checked>Y</label>
-              <label class="radio"><input type="radio" name="carry" id="fmCarryN" value="N">N</label>
-            </div>
-          </label>
-          <label>
-            <span>Kết quả / Ghi chú</span>
-            <input id="fmNote" type="text" placeholder="Kết quả, vướng mắc, ghi chú..." />
-          </label>
-        </div>
-
-        <div class="grid2">
-          <label>
-            <span>Commit (tuỳ chọn)</span>
-            <input id="fmCommit" type="number" step="any" />
-          </label>
-          <label>
-            <span>Actual (tuỳ chọn)</span>
-            <input id="fmActual" type="number" step="any" />
-          </label>
-        </div>
-
-        <div class="warn" id="taskWarn" hidden></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn" data-close="modalTask">Huỷ</button>
-        <button id="btnSaveTask" class="btn primary">Lưu</button>
-      </div>
     </div>
   </div>
 
-  <!-- Modal: Catalog -->
-  <div id="modalCatalog" class="modal" hidden>
-    <div class="modal-card wide">
-      <div class="modal-head">
-        <div class="modal-title">Danh mục (Dropdown)</div>
-        <button class="icon-btn" data-close="modalCatalog" aria-label="Close">×</button>
+  <!-- Task modal -->
+  <div class="backdrop" id="taskBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="taskTitle">
+      <div class="mhead">
+        <h2 id="taskTitle">Thêm công việc</h2>
+        <button class="iconBtn" id="taskClose" aria-label="Đóng">×</button>
       </div>
+      <form id="taskForm">
+        <div class="mbody">
+          <input type="hidden" id="fmId"/>
+          <div class="formGrid">
+            <div class="field">
+              <label>Nhóm công việc *</label>
+              <select id="fmGroup"></select>
+            </div>
+            <div class="field">
+              <label>CB đầu mối *</label>
+              <select id="fmOwner"></select>
+            </div>
+            <div class="field full">
+              <label>Công việc / Hoạt động *</label>
+              <input id="fmTitle" type="text" placeholder="Ví dụ: gọi KH A, gặp KH B, hoàn thiện hồ sơ..."/>
+            </div>
+            <div class="field">
+              <label>Deadline *</label>
+              <input id="fmDeadline" type="date"/>
+            </div>
+            <div class="field">
+              <label>Trạng thái *</label>
+              <select id="fmStatus"></select>
+            </div>
+            <div class="field">
+              <label>Priority</label>
+              <select id="fmPriority"></select>
+            </div>
+            <div class="field">
+              <label>CarryOver</label>
+              <select id="fmCarry"></select>
+            </div>
+            <div class="field">
+              <label>KPI (tuỳ chọn)</label>
+              <select id="fmKpi"></select>
+            </div>
+            <div class="field">
+              <label>Output metric</label>
+              <select id="fmMetric"></select>
+            </div>
+            <div class="field">
+              <label>Commit (tuỳ chọn)</label>
+              <input id="fmCommit" type="number" step="0.01" inputmode="decimal"/>
+            </div>
+            <div class="field">
+              <label>Actual (tuỳ chọn)</label>
+              <input id="fmActual" type="number" step="0.01" inputmode="decimal"/>
+            </div>
+            <div class="field full">
+              <label>Kết quả / Ghi chú</label>
+              <textarea id="fmNote" placeholder="Tình hình, kết quả, vướng mắc..."></textarea>
+            </div>
+          </div>
+          <div class="smallHelp">Nhập xong bấm <b>Lưu</b>. Có thể bấm <b>ESC</b> hoặc click ra ngoài để đóng.</div>
+        </div>
+        <div class="mfoot">
+          <button class="btn ghost" type="button" id="btnCancel">Huỷ</button>
+          <button class="btn primary" type="submit" id="btnSave">Lưu</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-      <div class="modal-body">
+  <!-- Lists/settings modal -->
+  <div class="backdrop" id="listsBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="listsTitle">
+      <div class="mhead">
+        <h2 id="listsTitle">Danh mục (Dropdown)</h2>
+        <button class="iconBtn" id="listsClose" aria-label="Đóng">×</button>
+      </div>
+      <div class="mbody">
         <div class="tabs">
-          <button class="tab active" data-tab="tabStaff">Cán bộ</button>
-          <button class="tab" data-tab="tabLists">Danh mục khác</button>
-          <button class="tab" data-tab="tabStorage">Lưu trữ</button>
+          <button class="tabBtn active" data-tab="staffTab">Cán bộ</button>
+          <button class="tabBtn" data-tab="listsTab">Danh mục khác</button>
+          <button class="tabBtn" data-tab="storeTab">Lưu trữ</button>
         </div>
 
-        <div id="tabStaff" class="tabpane">
-          <div class="section-title">Danh sách cán bộ (StaffID + Tên)</div>
-          <div class="table-mini" id="staffTable"></div>
-          <button id="btnAddStaff" class="btn small">+ Thêm cán bộ</button>
+        <div id="staffTab">
+          <div class="smallHelp">Danh sách cán bộ (StaffID + Tên). Bạn có thể thêm/bớt. (Khuyến nghị: StaffID là “mã định danh CB”).</div>
+          <div id="staffList"></div>
+          <button class="btnSm" type="button" id="btnAddStaff">+ Thêm cán bộ</button>
         </div>
 
-        <div id="tabLists" class="tabpane" hidden>
+        <div id="listsTab" style="display:none">
           <div class="grid2">
             <div>
-              <div class="section-title">Trạng thái</div>
-              <div class="list-edit" id="statusList"></div>
-              <button class="btn small" data-addlist="statuses">+ Thêm trạng thái</button>
-            </div>
-            <div>
-              <div class="section-title">KPI</div>
-              <div class="list-edit" id="kpiList"></div>
-              <button class="btn small" data-addlist="kpis">+ Thêm KPI</button>
-            </div>
-          </div>
+              <div class="smallHelp"><b>Trạng thái</b></div>
+              <div id="statusList"></div>
+              <button class="btnSm" type="button" id="btnAddStatus">+ Thêm trạng thái</button>
 
-          <div class="grid2">
-            <div>
-              <div class="section-title">Nhóm công việc</div>
-              <div class="list-edit" id="groupList"></div>
-              <button class="btn small" data-addlist="groups">+ Thêm nhóm</button>
-            </div>
-            <div>
-              <div class="section-title">Output metric</div>
-              <div class="list-edit" id="metricList"></div>
-              <button class="btn small" data-addlist="metrics">+ Thêm metric</button>
-            </div>
-          </div>
+              <div style="height:12px"></div>
+              <div class="smallHelp"><b>Nhóm công việc</b></div>
+              <div id="groupList"></div>
+              <button class="btnSm" type="button" id="btnAddGroup">+ Thêm nhóm</button>
 
-          <div class="grid2">
+              <div style="height:12px"></div>
+              <div class="smallHelp"><b>Priority</b></div>
+              <div id="priorityList"></div>
+              <button class="btnSm" type="button" id="btnAddPriority">+ Thêm priority</button>
+            </div>
             <div>
-              <div class="section-title">Priority</div>
-              <div class="list-edit" id="priorityList"></div>
-              <button class="btn small" data-addlist="priorities">+ Thêm priority</button>
+              <div class="smallHelp"><b>KPI</b></div>
+              <div id="kpiList"></div>
+              <button class="btnSm" type="button" id="btnAddKpi">+ Thêm KPI</button>
+
+              <div style="height:12px"></div>
+              <div class="smallHelp"><b>Output metric</b></div>
+              <div id="metricList"></div>
+              <button class="btnSm" type="button" id="btnAddMetric">+ Thêm metric</button>
             </div>
           </div>
         </div>
 
-        <div id="tabStorage" class="tabpane" hidden>
-          <div class="section-title">Tuỳ chọn lưu trữ (để realtime)</div>
-
-          <div class="grid2">
-            <label>
-              <span>Storage mode</span>
-              <select id="storageMode">
-                <option value="local">local (trên máy)</option>
+        <div id="storeTab" style="display:none">
+          <div class="smallHelp">Để <b>real-time</b> giữa nhiều thiết bị: chọn <b>supabase</b> và nhập URL + anon key (mỗi thiết bị cần cấu hình 1 lần).</div>
+          <div class="formGrid" style="margin-top:10px">
+            <div class="field">
+              <label>Storage mode</label>
+              <select id="stMode">
+                <option value="local">local (mỗi máy 1 dữ liệu)</option>
                 <option value="supabase">supabase (dùng chung)</option>
               </select>
-            </label>
-            <label>
-              <span>Chu kỳ đồng bộ (giây)</span>
-              <input id="pollSeconds" type="number" min="2" max="60" step="1" value="4" />
-            </label>
+            </div>
+            <div class="field">
+              <label>Chu kỳ đồng bộ (giây)</label>
+              <input id="stInterval" type="number" min="2" step="1" value="5"/>
+            </div>
+            <div class="field full">
+              <label>Supabase URL</label>
+              <input id="stUrl" type="text" placeholder="https://xxxx.supabase.co"/>
+            </div>
+            <div class="field full">
+              <label>Supabase anon key</label>
+              <input id="stKey" type="text" placeholder="eyJhbGciOi..."/>
+            </div>
           </div>
-
-          <label>
-            <span>Supabase URL</span>
-            <input id="supabaseUrl" type="text" placeholder="https://xxxx.supabase.co" />
-          </label>
-          <label>
-            <span>Supabase anon key</span>
-            <input id="supabaseKey" type="text" placeholder="eyJhbGciOi..." />
-          </label>
-
-          <div class="hint small">
-            Gợi ý: để test nhanh, tạm thời tắt RLS cho bảng <b>tasks</b>. Sau khi chạy ổn, bật RLS + policy.
-          </div>
+          <div class="smallHelp">Mẹo: sau khi commit code mới, nếu trình duyệt “kẹt” cache, hãy mở link dạng <code>?v=5.0.0</code> hoặc Ctrl+F5.</div>
         </div>
-
-        <div class="warn" id="catalogWarn" hidden></div>
       </div>
-
-      <div class="modal-foot">
-        <button class="btn" data-close="modalCatalog">Đóng</button>
-        <button id="btnSaveCatalog" class="btn primary">Lưu danh mục</button>
+      <div class="mfoot">
+        <button class="btn ghost" type="button" id="btnListsCancel">Đóng</button>
+        <button class="btn primary" type="button" id="btnListsSave">Lưu danh mục</button>
       </div>
     </div>
   </div>
 
-  <!-- Optional: SheetJS for XLSX export (fallback to CSV if blocked) -->
+  <script src="config.js?v=5.0.0"></script>
+  <script src="app.js?v=5.0.0"></script>
+  <!-- SheetJS optional (if blocked, system falls back to CSV) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-  <script src="config.js?v=v4.1" defer></script>
-  <script src="app.js?v=v4.1" defer></script>
 </body>
 </html>
