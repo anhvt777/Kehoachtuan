@@ -223,3 +223,30 @@
   .pill input,.pill select{min-width:120px}
   tbody td::before{flex-basis:100px}
 }
+
+
+
+/* =========================
+   Sticky Top Bar (mobile)
+   v6.1.3
+   - Keep controls accessible while scrolling
+   - iOS safe-area supported
+   ========================= */
+@media (max-width: 720px){
+  .topbar{
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: var(--bg);
+    padding-top: calc(env(safe-area-inset-top) + 10px);
+    padding-bottom: 10px;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 10px 22px rgba(10,31,26,.10);
+  }
+  .topbar .tabsTop{ margin: 8px 0 0 0; }
+  .topbar .tabsTop .tabBtn{ width: auto; }
+}
