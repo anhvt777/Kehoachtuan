@@ -1,13 +1,17 @@
-Kehoachtuan Sticky Top Bar Patch v6.1.3
+Kehoachtuan Styles Fix Patch v6.1.4
 
-Replace these files in your GitHub repo root:
-- index.html
-- styles.css
+Problem:
+- styles.css in v6.1.3 was missing the BIDV base theme (:root variables, layout, modal/table styles),
+  so the page looked like raw HTML even though styles.css loaded 200 OK.
 
-(You can keep app.js from v6.1.2; included for convenience.)
+Fix:
+- Replace BOTH files in repo root:
+  1) index.html
+  2) styles.css
 
-Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.1.3
+Then open:
+https://anhvt777.github.io/Kehoachtuan/?v=6.1.4
+(or Ctrl+F5 / Incognito)
 
-What changed:
-- Added a sticky .topbar on mobile portrait so Week/Me + action buttons + tabs stay accessible while scrolling.
+Notes:
+- app.js/config.js can stay as-is.
