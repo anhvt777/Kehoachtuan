@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PGD - Theo dõi & Phân công công việc</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+      <span class="navbar-brand fw-semibold">Theo dõi & Phân công công việc</span>
+
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="text-white small me-2">Tuần:</div>
+        <input id="weekPicker" type="date" class="form-control form-control-sm" style="width: 155px;">
+        <div class="text-white small ms-2 me-2">Tôi là:</div>
+        <select id="currentUser" class="form-select form-select-sm" style="width: 240px;"></select>
+
+        <button id="btnAdd" class="btn btn-sm btn-light">+ Thêm việc</button>
+        <div class="btn-group">
+          <button id="btnExport" class="btn btn-sm btn-outline-light">Xuất báo cáo tuần</button>
+          <button class="btn btn-sm btn-outline-light dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"></button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="#" id="btnExportJson">Export JSON (backup)</a></li>
+            <li><a class="dropdown-item" href="#" id="btnImportJson">Import JSON</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="#" id="btnImportExcel">Import Excel mẫu</a></li>
+          </ul>
+        </div>
+        <button id="btnSettings" class="btn btn-sm btn-outline-light">Danh mục</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container-fluid py-3">
+    <div class="row g-3">
+      <div class="col-12 col-xl-3">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-semibold">Tóm tắt tuần</div>
+                <div class="text-muted small" id="weekLabel">—</div>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="toggleAdvanced">
+                <label class="form-check-label small" for="toggleAdvanced">Nâng cao</label>
+              </div>
+            </div>
+
+            <hr class="my-2" />
+
+            <div class="row g-2 small">
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="text-muted">Tổng việc</div>
+                  <div class="fs-5 fw-semibold" id="statTotal">0</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="text-muted">Hoàn thành</div>
+                  <div class="fs-5 fw-semibold" id="statDone">0</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="text-muted">Quá hạn</div>
+                  <div class="fs-5 fw-semibold text-danger" id="statOverdue">0</div>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="stat-box">
+                  <div class="text-muted">% hoàn thành</div>
+                  <div class="fs-5 fw-semibold" id="statPct">0%</div>
+                </div>
+              </div>
+            </div>
+
+            <hr class="my-3" />
+
+            <div class="d-flex gap-2 flex-wrap">
+              <select id="filterOwner" class="form-select form-select-sm">
+                <option value="">-- Lọc theo CB đầu mối --</option>
+              </select>
+              <select id="filterStatus" class="form-select form-select-sm">
+                <option value="">-- Lọc theo trạng thái --</option>
+              </select>
+              <select id="filterGroup" class="form-select form-select-sm">
+                <option value="">-- Lọc theo nhóm việc --</option>
+              </select>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="filterOverdue">
+                <label class="form-check-label small" for="filterOverdue">Chỉ quá hạn</label>
+              </div>
+              <button id="btnClearFilters" class="btn btn-sm btn-outline-secondary">Xoá lọc</button>
+            </div>
+
+            <div class="text-muted small mt-2">
+              Gợi ý: Việc chưa Done và CarryOver=Y sẽ tự hiển thị ở tuần hiện tại.
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+          <div class="card-body">
+            <div class="fw-semibold mb-2">Hướng dẫn nhanh</div>
+            <ol class="small mb-0">
+              <li>Chọn tuần (mốc Thứ 2).</li>
+              <li>Chọn “Tôi là” để ghi nhận người giao/ghi.</li>
+              <li>Thêm việc → chọn CB đầu mối (dropdown), deadline, trạng thái.</li>
+              <li>Cuối tuần bấm “Xuất báo cáo tuần” để tổng hợp.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 col-xl-9">
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover align-middle mb-0" id="tasksTable">
+                <thead class="table-dark">
+                  <tr>
+                    <th style="width:72px">ID</th>
+                    <th style="min-width:260px">Nhóm công việc</th>
+                    <th style="min-width:320px">Công việc / Hoạt động</th>
+                    <th style="width:140px">Deadline</th>
+                    <th style="min-width:220px">CB đầu mối</th>
+                    <th style="width:150px">Trạng thái</th>
+                    <th style="min-width:240px">Kết quả/Ghi chú</th>
+                    <th style="width:110px" class="text-end">Tác vụ</th>
+                  </tr>
+                  <tr class="advanced-head d-none">
+                    <th colspan="2">KPI</th>
+                    <th>Output metric</th>
+                    <th class="text-end">Commit</th>
+                    <th class="text-end">Actual</th>
+                    <th>Priority</th>
+                    <th>CarryOver</th>
+                    <th>Giao bởi</th>
+                  </tr>
+                </thead>
+                <tbody id="tasksTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-muted small mt-2">
+          * Hàng quá hạn tự tô đỏ. Bạn có thể dùng “Danh mục” để thêm KPI/nhóm việc/cán bộ – dropdown sẽ tự cập nhật.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Task Modal -->
+  <div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="taskModalTitle">Thêm công việc</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+        <div class="modal-body">
+          <form id="taskForm" class="row g-3">
+            <input type="hidden" id="taskId">
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Nhóm công việc</label>
+              <input type="text" class="form-control" id="taskGroup" placeholder="VD: 1. Xử lý nợ xấu...">
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label">CB đầu mối</label>
+              <select class="form-select" id="taskOwner"></select>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Công việc / Hoạt động</label>
+              <textarea class="form-control" id="taskTitle" rows="2" placeholder="Mô tả việc cần làm..."></textarea>
+            </div>
+
+            <div class="col-12 col-lg-4">
+              <label class="form-label">Deadline</label>
+              <input type="date" class="form-control" id="taskDeadline">
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label">Trạng thái</label>
+              <select class="form-select" id="taskStatus"></select>
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label">Priority</label>
+              <select class="form-select" id="taskPriority"></select>
+            </div>
+
+            <div class="col-12 col-lg-4">
+              <label class="form-label">KPI (tuỳ chọn)</label>
+              <select class="form-select" id="taskKpi"></select>
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label">Output metric</label>
+              <select class="form-select" id="taskMetric"></select>
+            </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label">CarryOver</label>
+              <select class="form-select" id="taskCarry">
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+              </select>
+            </div>
+
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Commit (tuỳ chọn)</label>
+              <input type="number" class="form-control" id="taskCommit" step="0.01">
+            </div>
+            <div class="col-12 col-lg-6">
+              <label class="form-label">Actual (tuỳ chọn)</label>
+              <input type="number" class="form-control" id="taskActual" step="0.01">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Kết quả / Ghi chú</label>
+              <textarea class="form-control" id="taskNote" rows="2"></textarea>
+            </div>
+          </form>
+
+          <div class="alert alert-info small mt-3 mb-0">
+            Mẹo: “Tuần” của công việc được tự động gán theo tuần đang chọn (thứ 2). Nếu bạn muốn theo dõi kiểu Excel cũ theo nhóm, hãy nhập “Nhóm công việc” giống trong file.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Huỷ</button>
+          <button type="button" class="btn btn-primary" id="btnSaveTask">Lưu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal fade" id="settingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Danh mục (Dropdown)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+        <div class="modal-body">
+          <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabStaff" type="button" role="tab">Cán bộ</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabStatus" type="button" role="tab">Trạng thái</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabKpi" type="button" role="tab">KPI</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGroup" type="button" role="tab">Nhóm việc</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMetric" type="button" role="tab">Output metric</button>
+            </li>
+          </ul>
+
+          <div class="tab-content pt-3">
+            <div class="tab-pane fade show active" id="tabStaff" role="tabpanel">
+              <div class="row g-3">
+                <div class="col-12 col-lg-6">
+                  <div class="fw-semibold mb-2">Danh sách cán bộ (StaffID + Tên)</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm">
+                      <thead><tr><th style="width:180px">StaffID</th><th>Tên</th><th style="width:80px"></th></tr></thead>
+                      <tbody id="staffList"></tbody>
+                    </table>
+                  </div>
+                  <button class="btn btn-sm btn-outline-primary" id="btnAddStaff">+ Thêm cán bộ</button>
+                </div>
+                <div class="col-12 col-lg-6">
+                  <div class="alert alert-warning small">
+                    Lưu ý: Website GitHub Pages là front-end tĩnh. Mặc định dữ liệu lưu trên trình duyệt (local). Nếu muốn nhiều người cùng dùng “chung dữ liệu”, hãy chuyển sang chế độ Supabase (hướng dẫn trong README).
+                  </div>
+                  <div class="fw-semibold mb-2">Tuỳ chọn lưu trữ</div>
+                  <div class="row g-2">
+                    <div class="col-12 col-md-6">
+                      <label class="form-label small">Storage mode</label>
+                      <select class="form-select form-select-sm" id="storageMode">
+                        <option value="local">local (trên máy)</option>
+                        <option value="supabase">supabase (dùng chung)</option>
+                      </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label small">Supabase URL</label>
+                      <input class="form-control form-control-sm" id="supabaseUrl" placeholder="https://xxxx.supabase.co">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label small">Supabase anon key</label>
+                      <input class="form-control form-control-sm" id="supabaseKey" placeholder="eyJhbGciOi...">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="tabStatus" role="tabpanel">
+              <div class="fw-semibold mb-2">Trạng thái</div>
+              <div class="d-flex gap-2 flex-wrap mb-2">
+                <button class="btn btn-sm btn-outline-primary" id="btnAddStatus">+ Thêm trạng thái</button>
+              </div>
+              <div id="statusList" class="list-editor"></div>
+            </div>
+
+            <div class="tab-pane fade" id="tabKpi" role="tabpanel">
+              <div class="fw-semibold mb-2">KPI</div>
+              <div class="d-flex gap-2 flex-wrap mb-2">
+                <button class="btn btn-sm btn-outline-primary" id="btnAddKpi">+ Thêm KPI</button>
+              </div>
+              <div id="kpiList" class="list-editor"></div>
+            </div>
+
+            <div class="tab-pane fade" id="tabGroup" role="tabpanel">
+              <div class="fw-semibold mb-2">Nhóm công việc (gợi ý)</div>
+              <div class="d-flex gap-2 flex-wrap mb-2">
+                <button class="btn btn-sm btn-outline-primary" id="btnAddGroup">+ Thêm nhóm</button>
+              </div>
+              <div id="groupList" class="list-editor"></div>
+            </div>
+
+            <div class="tab-pane fade" id="tabMetric" role="tabpanel">
+              <div class="fw-semibold mb-2">Output metric</div>
+              <div class="d-flex gap-2 flex-wrap mb-2">
+                <button class="btn btn-sm btn-outline-primary" id="btnAddMetric">+ Thêm metric</button>
+              </div>
+              <div id="metricList" class="list-editor"></div>
+            </div>
+
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+          <button class="btn btn-primary" id="btnSaveSettings">Lưu danh mục</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file inputs -->
+  <input type="file" id="fileJson" accept="application/json" class="d-none" />
+  <input type="file" id="fileExcel" accept=".xlsx,.xls" class="d-none" />
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./assets/config.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>
