@@ -1,904 +1,598 @@
-/* PGD Task Tracker - client-side app (GitHub Pages friendly)
- * Storage modes:
- *  - local: localStorage (mỗi máy 1 dữ liệu)
- *  - supabase: dùng chung nhiều người (cần cấu hình trong 'Danh mục')
- */
-
+/* Kehoachtuan - Task Tracker (GitHub Pages, LocalStorage)
+   - No build step
+   - Mobile-friendly
+   - Export weekly report (XLSX if SheetJS available, else CSV)
+*/
 (() => {
-  'use strict';
+  "use strict";
 
-  const LS_TASKS = 'pgd_tasks_v1';
-  const LS_META  = 'pgd_meta_v1';
+  const CFG = window.CONFIG || {};
+  const $ = (sel) => document.querySelector(sel);
 
-  // ---------- Utils ----------
-  const pad2 = (n) => String(n).padStart(2, '0');
-  const todayIso = () => {
-    const d = new Date();
-    d.setHours(0,0,0,0);
-    return d.toISOString().slice(0,10);
+  // ---------- Dates ----------
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const toISODate = (d) => {
+    // d: Date
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   };
-  const isoToVN = (iso) => {
-    if (!iso) return '';
-    const [y,m,d] = iso.split('-');
-    if (!y || !m || !d) return iso;
-    return `${pad2(Number(d))}/${pad2(Number(m))}/${y}`;
+  const parseISODate = (s) => {
+    // s: yyyy-mm-dd
+    if (!s) return null;
+    const [y, m, d] = s.split("-").map((x) => parseInt(x, 10));
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d);
   };
-  const parseVNDateLooseToISO = (v) => {
-    // Accept "15/3", "15/3/2026", "2026-03-15"
-    if (!v) return '';
-    const s = String(v).trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
-    if (!m) return '';
-    let dd = Number(m[1]), mm = Number(m[2]), yy = m[3] ? Number(m[3]) : (new Date()).getFullYear();
-    if (yy < 100) yy += 2000;
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return '';
-    return `${yy}-${pad2(mm)}-${pad2(dd)}`;
+  const formatDDMMYYYY = (iso) => {
+    if (!iso) return "";
+    const d = parseISODate(iso);
+    if (!d) return "";
+    return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
   };
-
-  const mondayOf = (date) => {
-    const d = new Date(date);
-    d.setHours(0,0,0,0);
-    const day = d.getDay(); // 0=Sun
-    const diff = (day === 0 ? -6 : 1) - day; // shift to Monday
-    d.setDate(d.getDate() + diff);
-    return d;
-  };
-  const isoMondayOf = (isoDate) => mondayOf(new Date(isoDate)).toISOString().slice(0,10);
-
-  const isOverdue = (task) => {
-    if (!task.deadline) return false;
-    const t = todayIso();
-    return task.status !== 'Done' && task.deadline < t;
+  const mondayOf = (d) => {
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const day = x.getDay(); // 0 Sun ... 6 Sat
+    const diff = (day === 0 ? -6 : 1) - day;
+    x.setDate(x.getDate() + diff);
+    x.setHours(0, 0, 0, 0);
+    return x;
   };
 
-  const downloadBlob = (blob, filename) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 500);
-  };
+  // ---------- Storage ----------
+  const KEY_TASKS = CFG.storageKey || "kehoachtuan.tasks.v1";
+  const KEY_LISTS = "kehoachtuan.lists.v1";
+
+  function loadLists() {
+    const raw = localStorage.getItem(KEY_LISTS);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+  function saveLists(lists) {
+    localStorage.setItem(KEY_LISTS, JSON.stringify(lists));
+  }
+  function getLists() {
+    const saved = loadLists() || {};
+    return {
+      staff: saved.staff || CFG.staff || [],
+      kpis: saved.kpis || CFG.kpis || [],
+      statuses: saved.statuses || CFG.statuses || ["Not started", "Doing", "Done", "Blocked"],
+      priorities: saved.priorities || CFG.priorities || ["A", "B", "C"],
+      groups: saved.groups || CFG.groups || [],
+      outputMetrics: saved.outputMetrics || CFG.outputMetrics || []
+    };
+  }
+
+  function loadTasks() {
+    const raw = localStorage.getItem(KEY_TASKS);
+    if (!raw) return [];
+    try {
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveTasks(tasks) {
+    localStorage.setItem(KEY_TASKS, JSON.stringify(tasks));
+  }
 
   // ---------- State ----------
-  let meta = null;
-  let tasks = [];
-  let selectedWeekStart = '';
-  let currentUserId = '';
-  let advancedMode = false;
-
-  // ---------- DOM ----------
-  const el = (id) => document.getElementById(id);
-
-  const weekPicker = el('weekPicker');
-  const currentUser = el('currentUser');
-  const weekLabel = el('weekLabel');
-
-  const filterOwner = el('filterOwner');
-  const filterStatus = el('filterStatus');
-  const filterGroup = el('filterGroup');
-  const filterOverdue = el('filterOverdue');
-
-  const statTotal = el('statTotal');
-  const statDone = el('statDone');
-  const statOverdue = el('statOverdue');
-  const statPct = el('statPct');
-
-  const tasksTbody = el('tasksTbody');
-  const toggleAdvanced = el('toggleAdvanced');
-
-  // Task modal
-  const taskModalEl = el('taskModal');
-  const taskModal = new bootstrap.Modal(taskModalEl);
-  const taskModalTitle = el('taskModalTitle');
-  const btnSaveTask = el('btnSaveTask');
-
-  const taskId = el('taskId');
-  const taskGroup = el('taskGroup');
-  const taskOwner = el('taskOwner');
-  const taskTitle = el('taskTitle');
-  const taskDeadline = el('taskDeadline');
-  const taskStatus = el('taskStatus');
-  const taskPriority = el('taskPriority');
-  const taskKpi = el('taskKpi');
-  const taskMetric = el('taskMetric');
-  const taskCarry = el('taskCarry');
-  const taskCommit = el('taskCommit');
-  const taskActual = el('taskActual');
-  const taskNote = el('taskNote');
-
-  // Settings modal
-  const settingsModalEl = el('settingsModal');
-  const settingsModal = new bootstrap.Modal(settingsModalEl);
-
-  const staffList = el('staffList');
-  const storageMode = el('storageMode');
-  const supabaseUrl = el('supabaseUrl');
-  const supabaseKey = el('supabaseKey');
-
-  const statusList = el('statusList');
-  const kpiList = el('kpiList');
-  const groupList = el('groupList');
-  const metricList = el('metricList');
-
-  // Hidden file inputs
-  const fileJson = el('fileJson');
-  const fileExcel = el('fileExcel');
-
-  // ---------- Storage (local / supabase) ----------
-  let supa = null;
-
-  const loadLocalTasks = () => {
-    try {
-      tasks = JSON.parse(localStorage.getItem(LS_TASKS) || '[]');
-    } catch {
-      tasks = [];
-    }
-  };
-  const saveLocalTasks = () => localStorage.setItem(LS_TASKS, JSON.stringify(tasks));
-
-  const loadMeta = () => {
-    const defaults = window.APP_CONFIG;
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(LS_META) || 'null'); } catch { saved = null; }
-    meta = structuredClone(defaults);
-    if (saved) {
-      // shallow merge
-      meta.storage = { ...meta.storage, ...(saved.storage || {}) };
-      meta.statuses = Array.isArray(saved.statuses) ? saved.statuses : meta.statuses;
-      meta.priorities = Array.isArray(saved.priorities) ? saved.priorities : meta.priorities;
-      meta.kpis = Array.isArray(saved.kpis) ? saved.kpis : meta.kpis;
-      meta.groups = Array.isArray(saved.groups) ? saved.groups : meta.groups;
-      meta.metrics = Array.isArray(saved.metrics) ? saved.metrics : meta.metrics;
-      meta.staff = Array.isArray(saved.staff) ? saved.staff : meta.staff;
-    }
-  };
-  const saveMeta = () => localStorage.setItem(LS_META, JSON.stringify(meta));
-
-  const initSupabaseIfNeeded = () => {
-    if (meta.storage.mode !== 'supabase') { supa = null; return; }
-    if (!meta.storage.supabaseUrl || !meta.storage.supabaseAnonKey) {
-      alert('Bạn đang chọn Supabase nhưng chưa điền URL / Anon Key trong Danh mục.');
-      supa = null;
-      return;
-    }
-    supa = window.supabase.createClient(meta.storage.supabaseUrl, meta.storage.supabaseAnonKey);
+  const state = {
+    weekStartISO: null,
+    meId: "",
+    filterAssignee: "",
+    filterStatus: "",
+    filterGroup: "",
+    onlyOverdue: false,
+    tasks: []
   };
 
-  const fetchTasks = async () => {
-    if (meta.storage.mode !== 'supabase' || !supa) {
-      loadLocalTasks();
-      return;
+  // ---------- DOM refs ----------
+  const elWeek = $("#weekPicker");
+  const elMe = $("#mePicker");
+  const elBtnAdd = $("#btnAdd");
+  const elBtnExport = $("#btnExport");
+  const elTblBody = $("#tasksTbody");
+
+  const elSumTotal = $("#sumTotal");
+  const elSumDone = $("#sumDone");
+  const elSumOverdue = $("#sumOverdue");
+  const elSumPct = $("#sumPct");
+
+  const elFilterAssignee = $("#filterAssignee");
+  const elFilterStatus = $("#filterStatus");
+  const elFilterGroup = $("#filterGroup");
+  const elFilterOverdue = $("#filterOverdue");
+  const elBtnClearFilter = $("#btnClearFilter");
+
+  // Modal
+  const modal = $("#taskModal");
+  const fm = $("#taskForm");
+  const fmId = $("#fmId");
+  const fmGroup = $("#fmGroup");
+  const fmAssignee = $("#fmAssignee");
+  const fmTask = $("#fmTask");
+  const fmDeadline = $("#fmDeadline");
+  const fmStatus = $("#fmStatus");
+  const fmPriority = $("#fmPriority");
+  const fmKpi = $("#fmKpi");
+  const fmMetric = $("#fmMetric");
+  const fmCarryY = $("#fmCarryY");
+  const fmCarryN = $("#fmCarryN");
+  const fmCommit = $("#fmCommit");
+  const fmActual = $("#fmActual");
+  const fmNote = $("#fmNote");
+  const btnCancel = $("#btnCancel");
+  const btnSave = $("#btnSave");
+
+  // ---------- Utils ----------
+  function staffById(lists, id) {
+    return (lists.staff || []).find((x) => String(x.id) === String(id)) || null;
+  }
+  function nextTaskId(tasks) {
+    let maxId = 0;
+    for (const t of tasks) {
+      const n = parseInt(t.id, 10);
+      if (!Number.isNaN(n)) maxId = Math.max(maxId, n);
     }
-    const { data, error } = await supa.from('tasks').select('*').order('created_at', { ascending: true });
-    if (error) {
-      console.error(error);
-      alert('Không đọc được dữ liệu từ Supabase. Kiểm tra cấu hình / RLS.');
-      return;
-    }
-    // Normalize
-    tasks = (data || []).map(r => ({
-      id: r.id,
-      seq: r.seq ?? 0,
-      weekStart: r.week_start,
-      group: r.group_name || '',
-      title: r.title || '',
-      deadline: r.deadline || '',
-      status: r.status || 'Not started',
-      ownerId: r.owner_id || '',
-      ownerName: r.owner_name || '',
-      note: r.note || '',
-      result: r.result || '',
-      kpi: r.kpi || '',
-      metric: r.metric || '',
-      commit: r.commit ?? null,
-      actual: r.actual ?? null,
-      priority: r.priority || 'B',
-      carryOver: r.carry_over || 'Y',
-      assignedById: r.assigned_by_id || '',
-      assignedByName: r.assigned_by_name || '',
-      createdAt: r.created_at || '',
-      updatedAt: r.updated_at || ''
-    }));
-  };
+    return maxId + 1;
+  }
+  function isDone(status) {
+    return String(status || "").toLowerCase() === "done";
+  }
+  function isOverdue(task) {
+    if (!task.deadline) return false;
+    if (isDone(task.status)) return false;
+    const today = mondayOf(new Date()); // start-of-week? no, use today date
+    // Actually overdue = deadline < today (real date)
+    const now = new Date(); now.setHours(0,0,0,0);
+    const dl = parseISODate(task.deadline);
+    if (!dl) return false;
+    dl.setHours(0,0,0,0);
+    return dl < now;
+  }
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
 
-  const upsertTask = async (t) => {
-    if (meta.storage.mode !== 'supabase' || !supa) {
-      const i = tasks.findIndex(x => x.id === t.id);
-      if (i >= 0) tasks[i] = t; else tasks.push(t);
-      saveLocalTasks();
-      return;
-    }
-
-    const payload = {
-      id: t.id,
-      seq: t.seq,
-      week_start: t.weekStart,
-      group_name: t.group,
-      title: t.title,
-      deadline: t.deadline,
-      status: t.status,
-      owner_id: t.ownerId,
-      owner_name: t.ownerName,
-      note: t.note,
-      result: t.result,
-      kpi: t.kpi,
-      metric: t.metric,
-      commit: t.commit,
-      actual: t.actual,
-      priority: t.priority,
-      carry_over: t.carryOver,
-      assigned_by_id: t.assignedById,
-      assigned_by_name: t.assignedByName,
-      updated_at: new Date().toISOString()
-    };
-
-    const { error } = await supa.from('tasks').upsert(payload);
-    if (error) {
-      console.error(error);
-      alert('Lỗi khi lưu lên Supabase. Kiểm tra RLS / schema.');
-    }
-  };
-
-  const deleteTask = async (id) => {
-    if (meta.storage.mode !== 'supabase' || !supa) {
-      tasks = tasks.filter(t => t.id !== id);
-      saveLocalTasks();
-      return;
-    }
-    const { error } = await supa.from('tasks').delete().eq('id', id);
-    if (error) {
-      console.error(error);
-      alert('Lỗi khi xoá trên Supabase.');
-    }
-  };
-
-  // ---------- Helpers ----------
-  const staffById = (id) => meta.staff.find(s => s.id === id) || null;
-
-  const nextSeq = () => {
-    const maxSeq = tasks.reduce((m, t) => Math.max(m, Number(t.seq || 0)), 0);
-    return maxSeq + 1;
-  };
-  const makeId = (seq) => `T${String(seq).padStart(5,'0')}`;
-
-  const weekViewTasks = () => {
-    const ws = selectedWeekStart;
-    return tasks.filter(t => {
-      const inWeek = t.weekStart === ws;
-      const carry = (t.weekStart && t.weekStart < ws && (t.carryOver || 'Y') === 'Y' && t.status !== 'Done');
-      const show = inWeek || carry;
-
-      if (!show) return false;
-
-      if (filterOwner.value && t.ownerId !== filterOwner.value) return false;
-      if (filterStatus.value && t.status !== filterStatus.value) return false;
-      if (filterGroup.value && (t.group || '') !== filterGroup.value) return false;
-      if (filterOverdue.checked && !isOverdue(t)) return false;
-
-      return true;
-    }).sort((a,b) => (a.group || '').localeCompare(b.group || '') || (a.deadline||'').localeCompare(b.deadline||'') || (a.seq||0)-(b.seq||0));
-  };
-
-  const computeSummary = (list) => {
-    const total = list.length;
-    const done = list.filter(t => t.status === 'Done').length;
-    const overdue = list.filter(isOverdue).length;
-    const pct = total ? Math.round(done * 100 / total) : 0;
-    return { total, done, overdue, pct };
-  };
-
-  // ---------- Render ----------
-  const fillSelect = (selectEl, items, { placeholder=null, valueKey=null, labelKey=null } = {}) => {
-    selectEl.innerHTML = '';
-    if (placeholder !== null) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = placeholder;
-      selectEl.appendChild(opt);
+  // ---------- Populate dropdowns ----------
+  function fillSelect(el, items, { valueKey=null, labelFn=null, emptyLabel=null } = {}) {
+    el.innerHTML = "";
+    if (emptyLabel !== null) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = emptyLabel;
+      el.appendChild(opt);
     }
     for (const it of items) {
-      const opt = document.createElement('option');
-      if (typeof it === 'string') {
-        opt.value = it; opt.textContent = it;
-      } else {
-        opt.value = it[valueKey || 'id'];
-        opt.textContent = it[labelKey || 'name'] ?? it[valueKey || 'id'];
-      }
-      selectEl.appendChild(opt);
+      const opt = document.createElement("option");
+      if (valueKey) opt.value = String(it[valueKey] ?? "");
+      else opt.value = String(it ?? "");
+      opt.textContent = labelFn ? labelFn(it) : String(it?.name ?? it);
+      el.appendChild(opt);
     }
-  };
+  }
 
-  const renderDropdowns = () => {
-    // Current user
-    fillSelect(currentUser, meta.staff.filter(s => s.id !== '54000000'), { valueKey:'id', labelKey:'name' });
-    if (!currentUserId) currentUserId = meta.staff[0]?.id || '';
-    currentUser.value = currentUserId;
+  function refreshAllDropdowns() {
+    const lists = getLists();
 
+    // Me picker + Assignee
+    fillSelect(elMe, lists.staff, {
+      valueKey: "id",
+      labelFn: (s) => `${s.id} - ${s.name}`,
+      emptyLabel: "-- Chọn --"
+    });
+    fillSelect(fmAssignee, lists.staff, {
+      valueKey: "id",
+      labelFn: (s) => `${s.id} - ${s.name}`,
+      emptyLabel: "-- Chọn --"
+    });
     // Filters
-    fillSelect(filterOwner, meta.staff, { placeholder: '-- Lọc theo CB đầu mối --', valueKey:'id', labelKey:'name' });
-    fillSelect(filterStatus, meta.statuses, { placeholder: '-- Lọc theo trạng thái --' });
-    fillSelect(filterGroup, meta.groups, { placeholder: '-- Lọc theo nhóm việc --' });
+    fillSelect(elFilterAssignee, lists.staff, {
+      valueKey: "id",
+      labelFn: (s) => `${s.name}`,
+      emptyLabel: "-- Lọc theo CB đầu mối --"
+    });
 
-    // Task modal selects
-    fillSelect(taskOwner, meta.staff, { valueKey:'id', labelKey:'name' });
-    fillSelect(taskStatus, meta.statuses);
-    fillSelect(taskPriority, meta.priorities);
-    fillSelect(taskKpi, [''].concat(meta.kpis), { placeholder: '(Không chọn)' });
-    fillSelect(taskMetric, [''].concat(meta.metrics), { placeholder: '(Không chọn)' });
-  };
+    fillSelect(fmGroup, lists.groups, { emptyLabel: "-- Chọn --" });
+    fillSelect(elFilterGroup, lists.groups, { emptyLabel: "-- Lọc theo nhóm việc --" });
 
-  const renderStats = () => {
-    const list = weekViewTasks();
-    const s = computeSummary(list);
-    statTotal.textContent = s.total;
-    statDone.textContent = s.done;
-    statOverdue.textContent = s.overdue;
-    statPct.textContent = `${s.pct}%`;
-  };
+    fillSelect(fmStatus, lists.statuses, { emptyLabel: "-- Chọn --" });
+    fillSelect(elFilterStatus, lists.statuses, { emptyLabel: "-- Lọc theo trạng thái --" });
 
-  const renderWeekLabel = () => {
-    weekLabel.textContent = `Tuần bắt đầu: ${isoToVN(selectedWeekStart)}`;
-  };
+    fillSelect(fmPriority, lists.priorities, { emptyLabel: "-- Chọn --" });
 
-  const renderTable = () => {
-    const list = weekViewTasks();
-    tasksTbody.innerHTML = '';
+    fillSelect(fmKpi, lists.kpis, { emptyLabel: "-- (tuỳ chọn) --" });
+    fillSelect(fmMetric, lists.outputMetrics, { emptyLabel: "-- (tuỳ chọn) --" });
+  }
 
-    for (const t of list) {
-      const tr = document.createElement('tr');
-      if (isOverdue(t)) tr.classList.add('table-danger');
+  // ---------- Rendering ----------
+  function getVisibleTasks() {
+    const weekISO = state.weekStartISO;
+    const lists = getLists();
 
-      const owner = staffById(t.ownerId);
-      const ownerText = owner ? `${owner.id} - ${owner.name}` : (t.ownerName ? `${t.ownerId} - ${t.ownerName}` : (t.ownerId || ''));
+    const base = state.tasks.filter((t) => {
+      // CarryOver rule: show current week tasks OR older week tasks not done with carryOver Y
+      if (!weekISO) return false;
+      if (t.weekStart === weekISO) return true;
+      if (t.weekStart && t.weekStart < weekISO && String(t.carryOver || "Y").toUpperCase() === "Y" && !isDone(t.status)) return true;
+      return false;
+    });
 
-      tr.innerHTML = `
-        <td class="mono">${t.id}</td>
-        <td>${escapeHtml(t.group || '')}</td>
-        <td>${escapeHtml(t.title || '')}</td>
-        <td>${isoToVN(t.deadline)}</td>
-        <td>${escapeHtml(ownerText)}</td>
-        <td>${renderStatusBadge(t.status)}</td>
-        <td>${escapeHtml(t.result || t.note || '')}</td>
-        <td class="text-end">
-          <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${t.id}">Sửa</button>
-          <button class="btn btn-sm btn-outline-danger" data-action="del" data-id="${t.id}">Xoá</button>
-        </td>
-      `;
-      tasksTbody.appendChild(tr);
+    return base.filter((t) => {
+      if (state.filterAssignee && String(t.assigneeId) !== String(state.filterAssignee)) return false;
+      if (state.filterStatus && String(t.status) !== String(state.filterStatus)) return false;
+      if (state.filterGroup && String(t.group) !== String(state.filterGroup)) return false;
+      if (state.onlyOverdue && !isOverdue(t)) return false;
+      return true;
+    }).map((t) => {
+      const ass = staffById(lists, t.assigneeId);
+      const giver = staffById(lists, t.assignedById);
+      return {
+        ...t,
+        assigneeName: ass ? ass.name : (t.assigneeName || ""),
+        giverName: giver ? giver.name : (t.giverName || "")
+      };
+    }).sort((a,b) => {
+      // sort: overdue first, then deadline, then id
+      const ao = isOverdue(a) ? 0 : 1;
+      const bo = isOverdue(b) ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+      if ((a.deadline || "") !== (b.deadline || "")) return (a.deadline || "").localeCompare(b.deadline || "");
+      return parseInt(a.id,10) - parseInt(b.id,10);
+    });
+  }
 
-      if (advancedMode) {
-        const tr2 = document.createElement('tr');
-        tr2.className = 'advanced-row';
-        tr2.innerHTML = `
-          <td colspan="8" class="bg-body-tertiary">
-            <div class="d-flex flex-wrap gap-2 small">
-              <span class="badge text-bg-secondary">KPI: ${escapeHtml(t.kpi || '-')}</span>
-              <span class="badge text-bg-secondary">Metric: ${escapeHtml(t.metric || '-')}</span>
-              <span class="badge text-bg-secondary">Commit: ${t.commit ?? '-'}</span>
-              <span class="badge text-bg-secondary">Actual: ${t.actual ?? '-'}</span>
-              <span class="badge text-bg-secondary">Priority: ${escapeHtml(t.priority || 'B')}</span>
-              <span class="badge text-bg-secondary">CarryOver: ${escapeHtml(t.carryOver || 'Y')}</span>
-              <span class="badge text-bg-secondary">Giao bởi: ${escapeHtml((t.assignedById ? (t.assignedById + ' - ' + (t.assignedByName||'')) : '-'))}</span>
-              <span class="badge text-bg-secondary">WeekStart: ${isoToVN(t.weekStart || '')}</span>
+  function renderSummary(visible) {
+    const total = visible.length;
+    const done = visible.filter((t) => isDone(t.status)).length;
+    const overdue = visible.filter((t) => isOverdue(t)).length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+
+    elSumTotal.textContent = String(total);
+    elSumDone.textContent = String(done);
+    elSumOverdue.textContent = String(overdue);
+    elSumPct.textContent = `${pct}%`;
+  }
+
+  function renderTable() {
+    const visible = getVisibleTasks();
+    renderSummary(visible);
+
+    const rows = visible.map((t) => {
+      const overdue = isOverdue(t);
+      return `
+        <tr class="${overdue ? "row-overdue" : ""}">
+          <td class="col-id">${escapeHtml(t.id)}</td>
+          <td>${escapeHtml(t.group || "")}</td>
+          <td class="col-task">${escapeHtml(t.task || "")}</td>
+          <td class="col-date">${escapeHtml(formatDDMMYYYY(t.deadline))}</td>
+          <td>${escapeHtml(t.assigneeName || t.assigneeId || "")}</td>
+          <td>${escapeHtml(t.status || "")}</td>
+          <td class="col-note">${escapeHtml(t.note || "")}</td>
+          <td class="col-actions">
+            <button class="btn-mini" data-act="edit" data-id="${escapeHtml(t.id)}">Sửa</button>
+            <button class="btn-mini danger" data-act="del" data-id="${escapeHtml(t.id)}">Xoá</button>
+          </td>
+        </tr>
+        <tr class="row-sub ${overdue ? "row-overdue-sub" : ""}">
+          <td colspan="8">
+            <div class="subgrid">
+              <div><span class="k">KPI</span> ${escapeHtml(t.kpi || "")}</div>
+              <div><span class="k">Output</span> ${escapeHtml(t.outputMetric || "")}</div>
+              <div><span class="k">Commit</span> ${escapeHtml(t.commit ?? "")}</div>
+              <div><span class="k">Actual</span> ${escapeHtml(t.actual ?? "")}</div>
+              <div><span class="k">Priority</span> ${escapeHtml(t.priority || "")}</div>
+              <div><span class="k">CarryOver</span> ${escapeHtml(t.carryOver || "Y")}</div>
+              <div><span class="k">Giao bởi</span> ${escapeHtml(t.giverName || t.assignedById || "")}</div>
+              <div><span class="k">WeekStart</span> ${escapeHtml(formatDDMMYYYY(t.weekStart))}</div>
             </div>
           </td>
-        `;
-        tasksTbody.appendChild(tr2);
-      }
-    }
+        </tr>
+      `;
+    }).join("");
 
-    renderStats();
-  };
+    elTblBody.innerHTML = rows || `<tr><td colspan="8" class="muted">Chưa có công việc trong tuần này. Bấm “+ Thêm việc”.</td></tr>`;
+  }
 
-  const renderStatusBadge = (status) => {
-    const s = status || 'Not started';
-    let cls = 'text-bg-secondary';
-    if (s === 'Done') cls = 'text-bg-success';
-    else if (s === 'Doing') cls = 'text-bg-primary';
-    else if (s === 'Blocked') cls = 'text-bg-warning';
-    return `<span class="badge ${cls} badge-status">${escapeHtml(s)}</span>`;
-  };
+  // ---------- Modal ----------
+  function openModal({ mode, task=null } = {}) {
+    $("#modalTitle").textContent = mode === "edit" ? "Sửa công việc" : "Thêm công việc";
+    fm.reset();
+    fmId.value = task ? String(task.id) : "";
 
-  const escapeHtml = (str) => {
-    const s = String(str ?? '');
-    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  };
-
-  // ---------- Task modal ----------
-  const openTaskModal = (existing=null) => {
-    if (!existing) {
-      taskModalTitle.textContent = 'Thêm công việc';
-      taskId.value = '';
-      taskGroup.value = meta.groups[0] || '';
-      taskOwner.value = currentUserId || '';
-      taskTitle.value = '';
-      taskDeadline.value = '';
-      taskStatus.value = meta.statuses[0] || 'Not started';
-      taskPriority.value = 'B';
-      taskKpi.value = '';
-      taskMetric.value = '';
-      taskCarry.value = 'Y';
-      taskCommit.value = '';
-      taskActual.value = '';
-      taskNote.value = '';
+    if (task) {
+      fmGroup.value = task.group || "";
+      fmAssignee.value = task.assigneeId || "";
+      fmTask.value = task.task || "";
+      fmDeadline.value = task.deadline || "";
+      fmStatus.value = task.status || "";
+      fmPriority.value = task.priority || "";
+      fmKpi.value = task.kpi || "";
+      fmMetric.value = task.outputMetric || "";
+      (String(task.carryOver || "Y").toUpperCase() === "Y" ? fmCarryY : fmCarryN).checked = true;
+      fmCommit.value = task.commit ?? "";
+      fmActual.value = task.actual ?? "";
+      fmNote.value = task.note || "";
     } else {
-      taskModalTitle.textContent = `Sửa công việc ${existing.id}`;
-      taskId.value = existing.id;
-      taskGroup.value = existing.group || '';
-      taskOwner.value = existing.ownerId || '';
-      taskTitle.value = existing.title || '';
-      taskDeadline.value = existing.deadline || '';
-      taskStatus.value = existing.status || 'Not started';
-      taskPriority.value = existing.priority || 'B';
-      taskKpi.value = existing.kpi || '';
-      taskMetric.value = existing.metric || '';
-      taskCarry.value = existing.carryOver || 'Y';
-      taskCommit.value = (existing.commit ?? '') === null ? '' : (existing.commit ?? '');
-      taskActual.value = (existing.actual ?? '') === null ? '' : (existing.actual ?? '');
-      taskNote.value = existing.result || existing.note || '';
+      // Defaults
+      fmStatus.value = "Not started";
+      fmPriority.value = "B";
+      fmCarryY.checked = true;
+      fmAssignee.value = state.meId || "";
     }
-    taskModal.show();
-  };
 
-  const saveFromModal = async () => {
-    const id = taskId.value.trim();
-    const ownerId = taskOwner.value;
-    const owner = staffById(ownerId);
-    const seq = id ? (tasks.find(t => t.id === id)?.seq || 0) : nextSeq();
-    const newId = id || makeId(seq);
+    modal.classList.add("open");
+  }
+  function closeModal() {
+    modal.classList.remove("open");
+  }
+
+  function validateForm() {
+    const errs = [];
+    if (!fmGroup.value) errs.push("Bạn chưa chọn Nhóm công việc.");
+    if (!fmAssignee.value) errs.push("Bạn chưa chọn CB đầu mối.");
+    if (!fmTask.value.trim()) errs.push("Bạn chưa nhập Công việc / Hoạt động.");
+    if (!fmDeadline.value) errs.push("Bạn chưa chọn Deadline.");
+    if (!fmStatus.value) errs.push("Bạn chưa chọn Trạng thái.");
+    if (!state.weekStartISO) errs.push("Bạn chưa chọn Tuần.");
+    return errs;
+  }
+
+  function upsertTask() {
+    const errs = validateForm();
+    if (errs.length) {
+      alert(errs.join("\n"));
+      return;
+    }
+
+    const lists = getLists();
+    const ass = staffById(lists, fmAssignee.value);
+    const giver = staffById(lists, state.meId);
+
+    const isEdit = !!fmId.value;
+    const nowIso = new Date().toISOString();
 
     const t = {
-      id: newId,
-      seq,
-      weekStart: selectedWeekStart,
-      group: taskGroup.value.trim(),
-      title: taskTitle.value.trim(),
-      deadline: taskDeadline.value,
-      status: taskStatus.value,
-      ownerId,
-      ownerName: owner ? owner.name : '',
-      note: '',
-      result: taskNote.value.trim(),
-      kpi: taskKpi.value,
-      metric: taskMetric.value,
-      commit: taskCommit.value === '' ? null : Number(taskCommit.value),
-      actual: taskActual.value === '' ? null : Number(taskActual.value),
-      priority: taskPriority.value,
-      carryOver: taskCarry.value,
-      assignedById: currentUserId,
-      assignedByName: staffById(currentUserId)?.name || '',
-      createdAt: id ? (tasks.find(t => t.id === id)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      id: isEdit ? String(fmId.value) : String(nextTaskId(state.tasks)),
+      createdAt: isEdit ? undefined : nowIso,
+      updatedAt: nowIso,
+      weekStart: state.weekStartISO,
+      group: fmGroup.value,
+      assigneeId: String(fmAssignee.value),
+      assigneeName: ass ? ass.name : "",
+      status: fmStatus.value,
+      deadline: fmDeadline.value,
+      task: fmTask.value.trim(),
+      note: fmNote.value.trim(),
+      kpi: fmKpi.value || "",
+      outputMetric: fmMetric.value || "",
+      commit: fmCommit.value !== "" ? Number(fmCommit.value) : "",
+      actual: fmActual.value !== "" ? Number(fmActual.value) : "",
+      priority: fmPriority.value || "",
+      carryOver: fmCarryY.checked ? "Y" : "N",
+      assignedById: state.meId || "",
+      giverName: giver ? giver.name : ""
     };
 
-    if (!t.title) {
-      alert('Vui lòng nhập nội dung công việc.');
+    if (isEdit) {
+      const idx = state.tasks.findIndex((x) => String(x.id) === String(t.id));
+      if (idx >= 0) {
+        const createdAt = state.tasks[idx].createdAt || nowIso;
+        state.tasks[idx] = { ...state.tasks[idx], ...t, createdAt };
+      } else {
+        t.createdAt = nowIso;
+        state.tasks.push(t);
+      }
+    } else {
+      state.tasks.push(t);
+    }
+
+    saveTasks(state.tasks);
+    closeModal();
+    renderTable();
+  }
+
+  // ---------- Export ----------
+  function buildWeeklyReport() {
+    const visible = getVisibleTasks();
+    const week = state.weekStartISO || "";
+    const lists = getLists();
+
+    // Sheet 1: tasks
+    const sheetTasks = [
+      ["WeekStart", week],
+      [],
+      ["ID","Group","Task","Deadline(dd/mm/yyyy)","AssigneeID","AssigneeName","Status","KPI","OutputMetric","Commit","Actual","Priority","CarryOver","AssignedByID","AssignedByName","Note"]
+    ];
+    for (const t of visible) {
+      sheetTasks.push([
+        t.weekStart,
+        t.group || "",
+        t.task || "",
+        formatDDMMYYYY(t.deadline),
+        t.assigneeId || "",
+        t.assigneeName || "",
+        t.status || "",
+        t.kpi || "",
+        t.outputMetric || "",
+        t.commit ?? "",
+        t.actual ?? "",
+        t.priority || "",
+        t.carryOver || "",
+        t.assignedById || "",
+        t.giverName || "",
+        t.note || ""
+      ]);
+    }
+
+    // Sheet 2: summary by staff
+    const byStaff = {};
+    for (const t of visible) {
+      const sid = String(t.assigneeId || "");
+      if (!byStaff[sid]) byStaff[sid] = { total:0, done:0, overdue:0, commit:0, actual:0 };
+      byStaff[sid].total += 1;
+      if (isDone(t.status)) byStaff[sid].done += 1;
+      if (isOverdue(t)) byStaff[sid].overdue += 1;
+      const c = Number(t.commit); if (!Number.isNaN(c)) byStaff[sid].commit += c;
+      const a = Number(t.actual); if (!Number.isNaN(a)) byStaff[sid].actual += a;
+    }
+
+    const sheetSummary = [
+      ["WeekStart", week],
+      [],
+      ["AssigneeID","AssigneeName","TotalTasks","Done","Overdue","%Complete","SumCommit","SumActual"]
+    ];
+    for (const s of lists.staff) {
+      const sid = String(s.id);
+      const m = byStaff[sid] || { total:0, done:0, overdue:0, commit:0, actual:0 };
+      const pct = m.total ? Math.round((m.done / m.total) * 100) : 0;
+      sheetSummary.push([sid, s.name, m.total, m.done, m.overdue, `${pct}%`, m.commit, m.actual]);
+    }
+
+    return { visible, sheetTasks, sheetSummary };
+  }
+
+  function downloadBlob(filename, blob) {
+    const a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 0);
+  }
+
+  function exportWeekly() {
+    const { sheetTasks, sheetSummary } = buildWeeklyReport();
+    const week = state.weekStartISO || toISODate(mondayOf(new Date()));
+    const fname = `BaoCao_Tuan_${week}.xlsx`;
+
+    // If SheetJS available, export XLSX
+    if (window.XLSX && window.XLSX.utils) {
+      const wb = window.XLSX.utils.book_new();
+      const ws1 = window.XLSX.utils.aoa_to_sheet(sheetTasks);
+      const ws2 = window.XLSX.utils.aoa_to_sheet(sheetSummary);
+      window.XLSX.utils.book_append_sheet(wb, ws1, "TASKS_WEEK");
+      window.XLSX.utils.book_append_sheet(wb, ws2, "SUMMARY_BY_STAFF");
+      window.XLSX.writeFile(wb, fname);
       return;
     }
-    if (!t.ownerId) {
-      alert('Vui lòng chọn CB đầu mối.');
+
+    // Fallback: CSV (zip-less)
+    const toCSV = (aoa) => aoa.map((row) => row.map((cell) => {
+      const s = String(cell ?? "");
+      if (s.includes('"') || s.includes(",") || s.includes("\n")) return `"${s.replaceAll('"','""')}"`;
+      return s;
+    }).join(",")).join("\n");
+
+    const csv1 = toCSV(sheetTasks);
+    const csv2 = toCSV(sheetSummary);
+    downloadBlob(`TASKS_WEEK_${week}.csv`, new Blob([csv1], { type: "text/csv;charset=utf-8" }));
+    downloadBlob(`SUMMARY_BY_STAFF_${week}.csv`, new Blob([csv2], { type: "text/csv;charset=utf-8" }));
+    alert("Không tải được thư viện XLSX, hệ thống đã xuất CSV thay thế.");
+  }
+
+  // ---------- Actions ----------
+  function onTableClick(e) {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const act = btn.getAttribute("data-act");
+    const id = btn.getAttribute("data-id");
+    const t = state.tasks.find((x) => String(x.id) === String(id));
+    if (!t) return;
+
+    if (act === "edit") {
+      openModal({ mode: "edit", task: t });
       return;
     }
-
-    await upsertTask(t);
-    // update local cache if supabase
-    const i = tasks.findIndex(x => x.id === t.id);
-    if (i >= 0) tasks[i] = t; else tasks.push(t);
-
-    taskModal.hide();
-    renderTable();
-  };
-
-  // ---------- Settings modal ----------
-  const renderStaffEditor = () => {
-    staffList.innerHTML = '';
-    meta.staff.forEach((s, idx) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input class="form-control form-control-sm mono" value="${escapeHtml(s.id)}" data-idx="${idx}" data-field="id"></td>
-        <td><input class="form-control form-control-sm" value="${escapeHtml(s.name)}" data-idx="${idx}" data-field="name"></td>
-        <td class="text-end"><button class="btn btn-sm btn-outline-danger" data-action="rmStaff" data-idx="${idx}">Xoá</button></td>
-      `;
-      staffList.appendChild(tr);
-    });
-  };
-
-  const renderListEditor = (container, arr, addBtnId) => {
-    container.innerHTML = '';
-    arr.forEach((v, idx) => {
-      const div = document.createElement('div');
-      div.className = 'item';
-      div.innerHTML = `
-        <input class="form-control form-control-sm" value="${escapeHtml(v)}" data-idx="${idx}">
-        <button class="btn btn-sm btn-outline-danger" data-action="rmItem" data-idx="${idx}">Xoá</button>
-      `;
-      container.appendChild(div);
-    });
-  };
-
-  const openSettings = () => {
-    // fill inputs
-    storageMode.value = meta.storage.mode || 'local';
-    supabaseUrl.value = meta.storage.supabaseUrl || '';
-    supabaseKey.value = meta.storage.supabaseAnonKey || '';
-
-    renderStaffEditor();
-    renderListEditor(statusList, meta.statuses);
-    renderListEditor(kpiList, meta.kpis);
-    renderListEditor(groupList, meta.groups);
-    renderListEditor(metricList, meta.metrics);
-
-    settingsModal.show();
-  };
-
-  const saveSettings = async () => {
-    // read staff table
-    const staffRows = [...staffList.querySelectorAll('tr')];
-    const newStaff = [];
-    for (const tr of staffRows) {
-      const inputs = tr.querySelectorAll('input');
-      const id = inputs[0].value.trim();
-      const name = inputs[1].value.trim();
-      if (id && name) newStaff.push({ id, name });
-    }
-    // de-dup by id
-    const seen = new Set();
-    meta.staff = newStaff.filter(s => (seen.has(s.id) ? false : (seen.add(s.id), true)));
-
-    // read lists
-    const readList = (container) => [...container.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean);
-    meta.statuses = readList(statusList);
-    meta.kpis = readList(kpiList);
-    meta.groups = readList(groupList);
-    meta.metrics = readList(metricList);
-
-    meta.storage.mode = storageMode.value;
-    meta.storage.supabaseUrl = supabaseUrl.value.trim();
-    meta.storage.supabaseAnonKey = supabaseKey.value.trim();
-
-    saveMeta();
-    initSupabaseIfNeeded();
-    await fetchTasks();
-    renderDropdowns();
-    renderWeekLabel();
-    renderTable();
-    settingsModal.hide();
-  };
-
-  // ---------- Import/Export ----------
-  const exportWeeklyReport = () => {
-    const list = weekViewTasks();
-    const rows = list.map(t => ({
-      TaskID: t.id,
-      WeekStart: isoToVN(t.weekStart),
-      Group: t.group,
-      Task: t.title,
-      Deadline: isoToVN(t.deadline),
-      Status: t.status,
-      OwnerID: t.ownerId,
-      OwnerName: (staffById(t.ownerId)?.name || t.ownerName || ''),
-      ResultNote: (t.result || t.note || ''),
-      KPI: t.kpi || '',
-      Metric: t.metric || '',
-      Commit: t.commit ?? '',
-      Actual: t.actual ?? '',
-      Priority: t.priority || '',
-      CarryOver: t.carryOver || '',
-      AssignedBy: t.assignedById ? `${t.assignedById} - ${(t.assignedByName||'')}` : ''
-    }));
-
-    // Summary by owner
-    const byOwner = new Map();
-    for (const t of list) {
-      const key = t.ownerId || '';
-      if (!byOwner.has(key)) byOwner.set(key, { OwnerID:key, OwnerName:(staffById(key)?.name||t.ownerName||''), Total:0, Done:0, Overdue:0 });
-      const s = byOwner.get(key);
-      s.Total += 1;
-      if (t.status === 'Done') s.Done += 1;
-      if (isOverdue(t)) s.Overdue += 1;
-    }
-    const summaryRows = [...byOwner.values()].map(s => ({...s, PctComplete: s.Total ? Math.round(s.Done*100/s.Total) + '%' : '0%'}));
-
-    const wb = XLSX.utils.book_new();
-    const ws1 = XLSX.utils.json_to_sheet(rows);
-    const ws2 = XLSX.utils.json_to_sheet(summaryRows);
-
-    XLSX.utils.book_append_sheet(wb, ws1, 'TASKS_WEEK');
-    XLSX.utils.book_append_sheet(wb, ws2, 'SUMMARY_BY_STAFF');
-
-    const fn = `BaoCao_Tuan_${selectedWeekStart}.xlsx`;
-    XLSX.writeFile(wb, fn);
-  };
-
-  const exportJson = () => {
-    const payload = { meta, tasks };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
-    downloadBlob(blob, `PGD_TaskTracker_Backup_${todayIso()}.json`);
-  };
-
-  const importJson = async (file) => {
-    const text = await file.text();
-    const payload = JSON.parse(text);
-    if (payload.meta) meta = payload.meta;
-    if (payload.tasks) tasks = payload.tasks;
-    saveMeta();
-    saveLocalTasks();
-    initSupabaseIfNeeded();
-    renderDropdowns();
-    renderWeekLabel();
-    renderTable();
-  };
-
-  const importExcel = async (file) => {
-    const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-    const sheetName = wb.SheetNames[0];
-    const ws = wb.Sheets[sheetName];
-    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
-    // Expect layout similar to user's excel: A: group header, B: task, C: deadline, D: status/result, G: owner, J: note
-    let curGroup = '';
-    const imported = [];
-    const now = new Date().toISOString();
-    let seqBase = nextSeq();
-
-    for (let r = 0; r < aoa.length; r++) {
-      const row = aoa[r] || [];
-      const A = (row[0] || '').toString().trim();
-      const B = (row[1] || '').toString().trim();
-      const C = (row[2] || '').toString().trim();
-      const D = (row[3] || '').toString().trim();
-      const G = (row[6] || '').toString().trim();
-      const J = (row[9] || '').toString().trim();
-
-      // Skip title rows
-      if (r < 2) continue;
-      if (B === 'Công việc' && (row[2] || '').toString().includes('Thời hạn')) continue;
-
-      const isGroupRow = A && /^\d+\./.test(A);
-      if (isGroupRow) {
-        curGroup = A;
-        // If group row itself has an owner or deadline, create a task row for it
-        const dIso = parseVNDateLooseToISO(C);
-        const ownerParsed = parseOwner(G);
-        if (dIso || ownerParsed.ownerId) {
-          const id = makeId(seqBase);
-          imported.push({
-            id, seq: seqBase++,
-            weekStart: selectedWeekStart,
-            group: curGroup,
-            title: curGroup,
-            deadline: dIso,
-            status: normalizeStatus(D),
-            ownerId: ownerParsed.ownerId || '54000000',
-            ownerName: ownerParsed.ownerName || 'ALL',
-            note: '',
-            result: J,
-            kpi: '',
-            metric: '',
-            commit: null,
-            actual: null,
-            priority: 'B',
-            carryOver: 'Y',
-            assignedById: currentUserId,
-            assignedByName: staffById(currentUserId)?.name || '',
-            createdAt: now,
-            updatedAt: now
-          });
-        }
-        continue;
-      }
-
-      if (!B) continue;
-
-      const dIso = parseVNDateLooseToISO(C);
-      const ownerParsed = parseOwner(G);
-
-      const id = makeId(seqBase);
-      imported.push({
-        id, seq: seqBase++,
-        weekStart: dIso ? isoMondayOf(dIso) : selectedWeekStart,
-        group: curGroup || '',
-        title: B,
-        deadline: dIso,
-        status: normalizeStatus(D),
-        ownerId: ownerParsed.ownerId || '',
-        ownerName: ownerParsed.ownerName || '',
-        note: '',
-        result: J,
-        kpi: '',
-        metric: '',
-        commit: null,
-        actual: null,
-        priority: 'B',
-        carryOver: 'Y',
-        assignedById: currentUserId,
-        assignedByName: staffById(currentUserId)?.name || '',
-        createdAt: now,
-        updatedAt: now
-      });
-    }
-
-    // Merge into local tasks (avoid duplicates by id)
-    tasks = tasks.concat(imported);
-    saveLocalTasks();
-    renderTable();
-    alert(`Đã import ${imported.length} dòng công việc từ Excel (${sheetName}).`);
-  };
-
-  const normalizeStatus = (raw) => {
-    if (!raw) return meta.statuses[0] || 'Not started';
-    const s = raw.toLowerCase();
-    if (s.includes('done') || s.includes('hoàn') || s.includes('xong')) return 'Done';
-    if (s.includes('doing') || s.includes('đang')) return 'Doing';
-    if (s.includes('block') || s.includes('kẹt') || s.includes('vướng')) return 'Blocked';
-    // default keep original if in list
-    const exact = meta.statuses.find(x => x.toLowerCase() === raw.toLowerCase());
-    return exact || meta.statuses[0] || 'Not started';
-  };
-
-  const parseOwner = (raw) => {
-    // Expect "54000604 - HOANG TRUONG AN" or "ALL"
-    if (!raw) return { ownerId:'', ownerName:'' };
-    const s = raw.trim();
-    if (s.toUpperCase() === 'ALL') return { ownerId:'54000000', ownerName:'ALL' };
-    const m = s.match(/^(\d+)\s*-\s*(.+)$/);
-    if (m) return { ownerId: m[1].trim(), ownerName: m[2].trim() };
-    // If raw is id only
-    if (/^\d+$/.test(s)) return { ownerId: s, ownerName: staffById(s)?.name || '' };
-    return { ownerId:'', ownerName:s };
-  };
-
-  // ---------- Events ----------
-  const wireEvents = () => {
-    el('btnAdd').addEventListener('click', () => openTaskModal(null));
-    btnSaveTask.addEventListener('click', saveFromModal);
-
-    weekPicker.addEventListener('change', () => {
-      // normalize to Monday
-      const iso = weekPicker.value || todayIso();
-      selectedWeekStart = isoMondayOf(iso);
-      weekPicker.value = selectedWeekStart;
-      renderWeekLabel();
+    if (act === "del") {
+      if (!confirm(`Xoá công việc #${id}?`)) return;
+      state.tasks = state.tasks.filter((x) => String(x.id) !== String(id));
+      saveTasks(state.tasks);
       renderTable();
-    });
-
-    currentUser.addEventListener('change', () => {
-      currentUserId = currentUser.value;
-    });
-
-    filterOwner.addEventListener('change', renderTable);
-    filterStatus.addEventListener('change', renderTable);
-    filterGroup.addEventListener('change', renderTable);
-    filterOverdue.addEventListener('change', renderTable);
-
-    el('btnClearFilters').addEventListener('click', () => {
-      filterOwner.value = '';
-      filterStatus.value = '';
-      filterGroup.value = '';
-      filterOverdue.checked = false;
-      renderTable();
-    });
-
-    el('btnExport').addEventListener('click', exportWeeklyReport);
-    el('btnExportJson').addEventListener('click', (e) => { e.preventDefault(); exportJson(); });
-    el('btnImportJson').addEventListener('click', (e) => { e.preventDefault(); fileJson.click(); });
-    fileJson.addEventListener('change', async () => {
-      const f = fileJson.files?.[0];
-      if (f) await importJson(f);
-      fileJson.value = '';
-    });
-
-    el('btnImportExcel').addEventListener('click', (e) => { e.preventDefault(); fileExcel.click(); });
-    fileExcel.addEventListener('change', async () => {
-      const f = fileExcel.files?.[0];
-      if (f) await importExcel(f);
-      fileExcel.value = '';
-    });
-
-    el('btnSettings').addEventListener('click', openSettings);
-    el('btnSaveSettings').addEventListener('click', saveSettings);
-
-    // Settings add buttons
-    el('btnAddStaff').addEventListener('click', () => {
-      meta.staff.push({ id:'', name:'' });
-      renderStaffEditor();
-    });
-    el('btnAddStatus').addEventListener('click', () => { meta.statuses.push(''); renderListEditor(statusList, meta.statuses); });
-    el('btnAddKpi').addEventListener('click', () => { meta.kpis.push(''); renderListEditor(kpiList, meta.kpis); });
-    el('btnAddGroup').addEventListener('click', () => { meta.groups.push(''); renderListEditor(groupList, meta.groups); });
-    el('btnAddMetric').addEventListener('click', () => { meta.metrics.push(''); renderListEditor(metricList, meta.metrics); });
-
-    // Remove staff / list items (event delegation)
-    staffList.addEventListener('click', (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      if (btn.dataset.action === 'rmStaff') {
-        const idx = Number(btn.dataset.idx);
-        meta.staff.splice(idx, 1);
-        renderStaffEditor();
-      }
-    });
-    const listRemoveHandler = (container, arr, renderFn) => {
-      container.addEventListener('click', (e) => {
-        const btn = e.target.closest('button');
-        if (!btn) return;
-        if (btn.dataset.action === 'rmItem') {
-          const idx = Number(btn.dataset.idx);
-          arr.splice(idx, 1);
-          renderFn();
-        }
-      });
-      container.addEventListener('input', (e) => {
-        const input = e.target.closest('input');
-        if (!input) return;
-        const idx = Number(input.dataset.idx);
-        arr[idx] = input.value;
-      });
-    };
-    listRemoveHandler(statusList, meta.statuses, () => renderListEditor(statusList, meta.statuses));
-    listRemoveHandler(kpiList, meta.kpis, () => renderListEditor(kpiList, meta.kpis));
-    listRemoveHandler(groupList, meta.groups, () => renderListEditor(groupList, meta.groups));
-    listRemoveHandler(metricList, meta.metrics, () => renderListEditor(metricList, meta.metrics));
-
-    // Staff inputs update
-    staffList.addEventListener('input', (e) => {
-      const input = e.target.closest('input');
-      if (!input) return;
-      const idx = Number(input.dataset.idx);
-      const field = input.dataset.field;
-      meta.staff[idx][field] = input.value;
-    });
-
-    // Table actions
-    tasksTbody.addEventListener('click', async (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const action = btn.dataset.action;
-      const id = btn.dataset.id;
-      const t = tasks.find(x => x.id === id);
-      if (!t) return;
-
-      if (action === 'edit') {
-        openTaskModal(t);
-      } else if (action === 'del') {
-        if (!confirm(`Xoá công việc ${id}?`)) return;
-        await deleteTask(id);
-        tasks = tasks.filter(x => x.id !== id);
-        renderTable();
-      }
-    });
-
-    toggleAdvanced.addEventListener('change', () => {
-      advancedMode = toggleAdvanced.checked;
-      const advHead = document.querySelector('.advanced-head');
-      if (advancedMode) advHead.classList.remove('d-none'); else advHead.classList.add('d-none');
-      renderTable();
-    });
-  };
+      return;
+    }
+  }
 
   // ---------- Init ----------
-  const init = async () => {
-    loadMeta();
-    initSupabaseIfNeeded();
+  function initWeek() {
+    const today = new Date();
+    const m = mondayOf(today);
+    const iso = toISODate(m);
+    state.weekStartISO = iso;
+    elWeek.value = iso;
+  }
 
-    selectedWeekStart = isoMondayOf(todayIso());
-    weekPicker.value = selectedWeekStart;
-    renderWeekLabel();
+  function wireEvents() {
+    elWeek.addEventListener("change", () => {
+      const d = parseISODate(elWeek.value);
+      if (!d) return;
+      const m = mondayOf(d);
+      const iso = toISODate(m);
+      state.weekStartISO = iso;
+      elWeek.value = iso;
+      renderTable();
+    });
 
-    // Set defaults
-    currentUserId = meta.staff.find(s => s.id !== '54000000')?.id || (meta.staff[0]?.id || '');
-    advancedMode = false;
-    toggleAdvanced.checked = false;
-    document.querySelector('.advanced-head').classList.add('d-none');
+    elMe.addEventListener("change", () => {
+      state.meId = elMe.value || "";
+      // default assignee in modal = me
+    });
 
-    await fetchTasks();
-    renderDropdowns();
-    renderTable();
+    elBtnAdd.addEventListener("click", () => {
+      if (!state.meId) {
+        alert("Bạn cần chọn “Tôi là” trước khi thêm việc.");
+        return;
+      }
+      openModal({ mode: "add" });
+    });
+
+    elBtnExport.addEventListener("click", () => exportWeekly());
+
+    elTblBody.addEventListener("click", onTableClick);
+
+    // filters
+    elFilterAssignee.addEventListener("change", () => { state.filterAssignee = elFilterAssignee.value || ""; renderTable(); });
+    elFilterStatus.addEventListener("change", () => { state.filterStatus = elFilterStatus.value || ""; renderTable(); });
+    elFilterGroup.addEventListener("change", () => { state.filterGroup = elFilterGroup.value || ""; renderTable(); });
+    elFilterOverdue.addEventListener("change", () => { state.onlyOverdue = !!elFilterOverdue.checked; renderTable(); });
+    elBtnClearFilter.addEventListener("click", () => {
+      state.filterAssignee = ""; state.filterStatus = ""; state.filterGroup = ""; state.onlyOverdue = false;
+      elFilterAssignee.value = ""; elFilterStatus.value = ""; elFilterGroup.value = ""; elFilterOverdue.checked = false;
+      renderTable();
+    });
+
+    // modal
+    btnCancel.addEventListener("click", (ev) => { ev.preventDefault(); closeModal(); });
+    modal.addEventListener("click", (ev) => { if (ev.target === modal) closeModal(); });
+    fm.addEventListener("submit", (ev) => { ev.preventDefault(); upsertTask(); });
+    btnSave.addEventListener("click", (ev) => { ev.preventDefault(); upsertTask(); });
+
+    // keyboard
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && modal.classList.contains("open")) closeModal();
+    });
+  }
+
+  function bootstrap() {
+    // load tasks
+    state.tasks = loadTasks();
+
+    initWeek();
+    refreshAllDropdowns();
     wireEvents();
-  };
+    renderTable();
+  }
 
-  init();
-
+  // Start
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootstrap);
+  } else {
+    bootstrap();
+  }
 })();
