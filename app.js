@@ -1,337 +1,516 @@
-/* Kehoachtuan v5.0.0 - GitHub Pages (LocalStorage/Supabase) - Mobile-friendly */
+/* Kehoachtuan v6.1.0 - Tasks + Forecast (Card view) - Local / Supabase
+   - Forecast card UI (mobile-friendly)
+   - Excel export matches Du kien tuan.xlsx layout
+*/
 (() => {
   "use strict";
-
   const CFG = window.CONFIG || {};
-  const VERSION = "5.0.0";
+  const VERSION = "6.1.0";
 
-  // ---------- Helpers ----------
+  // ---- Storage keys ----
+  const KEY_LISTS = "kehoachtuan.lists.v6";
+  const KEY_SETTINGS = "kehoachtuan.settings.v6";
+  const KEY_TASKS_LOCAL = "kehoachtuan.tasks.v6";
+  const KEY_FC_LOCAL = "kehoachtuan.forecast.v6";
+
+  // ---- Helpers ----
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
   const pad2 = (n) => String(n).padStart(2, "0");
+  const toISO = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 
-  function toISODate(d) {
-    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  function parseISO(s){
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||"").trim());
+    if(!m) return null;
+    const d=new Date(+m[1], +m[2]-1, +m[3]);
+    d.setHours(0,0,0,0);
+    return d;
   }
-  function parseISODate(s) {
-    if (!s) return null;
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim());
-    if (!m) return null;
-    const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
-    if (!y || !mo || !da) return null;
-    return new Date(y, mo-1, da);
-  }
-  function formatDDMMYYYY(iso) {
-    const d = parseISODate(iso);
-    if (!d) return "";
+  function fmtDDMMYYYY(iso){
+    const d=parseISO(iso); if(!d) return "";
     return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`;
   }
-  function mondayOf(d) {
-    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const day = x.getDay(); // 0 Sun
-    const diff = (day === 0 ? -6 : 1) - day;
-    x.setDate(x.getDate() + diff);
+  function mondayOf(d){
+    const x=new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const day=x.getDay(); // 0 Sun
+    const diff=(day===0?-6:1)-day;
+    x.setDate(x.getDate()+diff);
     x.setHours(0,0,0,0);
     return x;
   }
-  function today0() {
-    const t = new Date(); t.setHours(0,0,0,0); return t;
+  function pickWeekStartISO(iso){
+    const d=parseISO(iso)||new Date();
+    return toISO(mondayOf(d));
   }
-  function escapeHtml(s) {
-    return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  function weekEndISO(weekStartISO){
+    const d=parseISO(weekStartISO)||mondayOf(new Date());
+    const end=new Date(d);
+    end.setDate(end.getDate()+5); // Mon->Sat (like sample)
+    return toISO(end);
   }
-  function pickWeekStartISO(iso) {
-    const d = parseISODate(iso);
-    if (!d) return toISODate(mondayOf(new Date()));
-    return toISODate(mondayOf(d));
+  function today0(){ const t=new Date(); t.setHours(0,0,0,0); return t; }
+  function escapeHtml(s){
+    return String(s??"").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+  function numOrNull(v){
+    if(v===null||v===undefined||v==="") return null;
+    const n=Number(v);
+    return Number.isFinite(n)?n:null;
+  }
+  function fmtNum(n){
+    if(n===null||n===undefined||n==="") return "";
+    const x=Number(n); if(!Number.isFinite(x)) return "";
+    return x.toLocaleString("vi-VN",{maximumFractionDigits:3});
   }
 
-  // ---------- Local keys ----------
-  const KEY_LISTS = "kehoachtuan.lists.v5";
-  const KEY_SETTINGS = "kehoachtuan.settings.v5";
-  const KEY_TASKS_LOCAL = "kehoachtuan.tasks.v5";
+  function loadJSON(key){ try { return JSON.parse(localStorage.getItem(key)||"null"); } catch { return null; } }
+  function saveJSON(key,obj){ localStorage.setItem(key, JSON.stringify(obj)); }
 
-  // ---------- Settings ----------
-  function loadSettings() {
-    const raw = localStorage.getItem(KEY_SETTINGS);
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
-  }
-  function saveSettings(s) {
-    localStorage.setItem(KEY_SETTINGS, JSON.stringify(s));
-  }
-  function getSettings() {
-    const s = loadSettings() || {};
+  function getSettings(){
+    const s=loadJSON(KEY_SETTINGS)||{};
     return {
       storageMode: s.storageMode || "local",
       supabaseUrl: s.supabaseUrl || "",
       supabaseAnonKey: s.supabaseAnonKey || "",
-      syncSeconds: Number(s.syncSeconds || 5),
+      syncSeconds: Math.max(3, Number(s.syncSeconds || 5)),
     };
   }
 
-  // ---------- Lists (dropdown) ----------
-  function loadLists() {
-    const raw = localStorage.getItem(KEY_LISTS);
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
-  }
-  function saveLists(lists) {
-    localStorage.setItem(KEY_LISTS, JSON.stringify(lists));
-  }
-  function getLists() {
-    const saved = loadLists() || {};
+  function nonEmptyArr(x){ return Array.isArray(x) && x.length>0; }
+
+  function getLists(){
+    const saved=loadJSON(KEY_LISTS)||{};
     return {
-      staff: saved.staff || CFG.staff || [],
-      groups: saved.groups || CFG.groups || [],
-      statuses: saved.statuses || CFG.statuses || ["Not started","Doing","Done","Blocked"],
-      priorities: saved.priorities || CFG.priorities || ["A","B","C"],
-      kpis: saved.kpis || CFG.kpis || [],
-      outputMetrics: saved.outputMetrics || CFG.outputMetrics || [],
+      staff: nonEmptyArr(saved.staff) ? saved.staff : (CFG.staff||[]),
+      groups: nonEmptyArr(saved.groups) ? saved.groups : (CFG.groups||[]),
+      statuses: nonEmptyArr(saved.statuses) ? saved.statuses : (CFG.statuses||["Not started","Doing","Done","Blocked"]),
+      priorities: nonEmptyArr(saved.priorities) ? saved.priorities : (CFG.priorities||["A","B","C"]),
+      kpis: nonEmptyArr(saved.kpis) ? saved.kpis : (CFG.kpis||[]),
+      outputMetrics: nonEmptyArr(saved.outputMetrics) ? saved.outputMetrics : (CFG.outputMetrics||[]),
+      forecastMetrics: nonEmptyArr(saved.forecastMetrics) ? saved.forecastMetrics : (CFG.forecastMetrics||[]),
     };
   }
 
-  function staffById(lists, id) {
-    return (lists.staff || []).find((x) => String(x.id) === String(id)) || null;
+  function staffById(id){
+    return (getLists().staff||[]).find(s => String(s.id)===String(id)) || null;
+  }
+  function isManager(meId){
+    return (CFG.managerIds||[]).map(String).includes(String(meId||""));
   }
 
-  // ---------- State ----------
-  const state = {
-    weekStartISO: pickWeekStartISO(toISODate(new Date())),
-    meId: "",
-    filterAssignee: "",
-    filterStatus: "",
-    filterGroup: "",
-    onlyOverdue: false,
-    tasks: [],
-    lastSyncAt: null,
-    syncing: false,
-  };
-
-  // ---------- DOM refs ----------
-  const elWeek = $("#weekPicker");
-  const elMe = $("#mePicker");
-  const elBtnAdd = $("#btnAdd");
-  const elBtnExport = $("#btnExport");
-  const elBtnLists = $("#btnLists");
-
-  const elTblBody = $("#tasksTbody");
-  const elSumTotal = $("#sumTotal");
-  const elSumDone = $("#sumDone");
-  const elSumOverdue = $("#sumOverdue");
-  const elSumPct = $("#sumPct");
-
-  const elFilterAssignee = $("#filterAssignee");
-  const elFilterStatus = $("#filterStatus");
-  const elFilterGroup = $("#filterGroup");
-  const elFilterOverdue = $("#filterOverdue");
-  const elBtnClearFilter = $("#btnClearFilter");
-
-  const syncDot = $("#syncDot");
-  const syncText = $("#syncText");
-
-  // Task modal
-  const taskBackdrop = $("#taskBackdrop");
-  const taskClose = $("#taskClose");
-  const taskTitle = $("#taskTitle");
-  const taskForm = $("#taskForm");
-  const btnCancel = $("#btnCancel");
-  const fmId = $("#fmId");
-  const fmGroup = $("#fmGroup");
-  const fmOwner = $("#fmOwner");
-  const fmTitle = $("#fmTitle");
-  const fmDeadline = $("#fmDeadline");
-  const fmStatus = $("#fmStatus");
-  const fmPriority = $("#fmPriority");
-  const fmCarry = $("#fmCarry");
-  const fmKpi = $("#fmKpi");
-  const fmMetric = $("#fmMetric");
-  const fmCommit = $("#fmCommit");
-  const fmActual = $("#fmActual");
-  const fmNote = $("#fmNote");
-
-  // Lists modal
-  const listsBackdrop = $("#listsBackdrop");
-  const listsClose = $("#listsClose");
-  const btnListsCancel = $("#btnListsCancel");
-  const btnListsSave = $("#btnListsSave");
-
-  const staffList = $("#staffList");
-  const statusList = $("#statusList");
-  const groupList = $("#groupList");
-  const priorityList = $("#priorityList");
-  const kpiList = $("#kpiList");
-  const metricList = $("#metricList");
-
-  const btnAddStaff = $("#btnAddStaff");
-  const btnAddStatus = $("#btnAddStatus");
-  const btnAddGroup = $("#btnAddGroup");
-  const btnAddPriority = $("#btnAddPriority");
-  const btnAddKpi = $("#btnAddKpi");
-  const btnAddMetric = $("#btnAddMetric");
-
-  const stMode = $("#stMode");
-  const stInterval = $("#stInterval");
-  const stUrl = $("#stUrl");
-  const stKey = $("#stKey");
-
-  // ---------- Modal management (avoid 2 modals stacked) ----------
-  function closeAllModals() {
-    taskBackdrop.classList.remove("open");
-    listsBackdrop.classList.remove("open");
-    document.body.style.overflow = "";
+  // ---- Supabase REST helpers ----
+  function sbBase(){
+    const s=getSettings();
+    return String(s.supabaseUrl||"").trim().replace(/\/+$/,"");
   }
-  function openBackdrop(which) {
-    closeAllModals();
-    which.classList.add("open");
-    document.body.style.overflow = "hidden";
-  }
-  function isDone(status) {
-    return String(status || "").toLowerCase() === "done";
-  }
-  function isOverdue(task) {
-    if (!task.deadline) return false;
-    if (isDone(task.status)) return false;
-    const dl = parseISODate(task.deadline);
-    if (!dl) return false;
-    const t0 = today0();
-    dl.setHours(0,0,0,0);
-    return dl < t0;
-  }
-
-  // ---------- Dropdown fills ----------
-  function fillSelect(el, items, {
-    valueKey = null,
-    labelFn = null,
-    emptyLabel = null,
-  } = {}) {
-    el.innerHTML = "";
-    if (emptyLabel !== null) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = emptyLabel;
-      el.appendChild(opt);
-    }
-    for (const it of items) {
-      const opt = document.createElement("option");
-      opt.value = valueKey ? String(it[valueKey] ?? "") : String(it ?? "");
-      opt.textContent = labelFn ? labelFn(it) : String(it?.name ?? it);
-      el.appendChild(opt);
-    }
-  }
-
-  function refreshDropdowns() {
-    const lists = getLists();
-
-    fillSelect(elMe, lists.staff, {
-      valueKey: "id",
-      labelFn: (s) => `${s.id} - ${s.name}`,
-      emptyLabel: "-- Chọn --"
-    });
-    fillSelect(fmOwner, lists.staff, {
-      valueKey: "id",
-      labelFn: (s) => `${s.id} - ${s.name}`,
-      emptyLabel: "-- Chọn --"
-    });
-    fillSelect(elFilterAssignee, lists.staff, {
-      valueKey: "id",
-      labelFn: (s) => s.name,
-      emptyLabel: "-- Lọc theo CB đầu mối --"
-    });
-
-    fillSelect(fmGroup, lists.groups, { emptyLabel: "-- Chọn --" });
-    fillSelect(elFilterGroup, lists.groups, { emptyLabel: "-- Lọc theo nhóm việc --" });
-
-    fillSelect(fmStatus, lists.statuses, { emptyLabel: "-- Chọn --" });
-    fillSelect(elFilterStatus, lists.statuses, { emptyLabel: "-- Lọc theo trạng thái --" });
-
-    fillSelect(fmPriority, lists.priorities, { emptyLabel: "-- Chọn --" });
-    fillSelect(fmCarry, ["Y","N"], { emptyLabel: "-- Chọn --" });
-
-    fillSelect(fmKpi, lists.kpis, { emptyLabel: "-- (tuỳ chọn) --" });
-    fillSelect(fmMetric, lists.outputMetrics, { emptyLabel: "-- (tuỳ chọn) --" });
-
-    // preserve selections
-    if (state.meId) elMe.value = state.meId;
-    if (state.filterAssignee) elFilterAssignee.value = state.filterAssignee;
-    if (state.filterStatus) elFilterStatus.value = state.filterStatus;
-    if (state.filterGroup) elFilterGroup.value = state.filterGroup;
-  }
-
-  // ---------- Local tasks ----------
-  function loadTasksLocal() {
-    const raw = localStorage.getItem(KEY_TASKS_LOCAL);
-    if (!raw) return [];
-    try {
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];
-    }
-  }
-  function saveTasksLocal(tasks) {
-    localStorage.setItem(KEY_TASKS_LOCAL, JSON.stringify(tasks));
-  }
-
-  // ---------- Supabase REST ----------
-  function sbHeaders() {
-    const s = getSettings();
-    const key = s.supabaseAnonKey.trim();
+  function sbHeaders(){
+    const key=String(getSettings().supabaseAnonKey||"").trim();
     return {
       "apikey": key,
       "Authorization": `Bearer ${key}`,
       "Content-Type": "application/json",
-      "Prefer": "return=representation"
+      "Prefer": "return=representation",
     };
   }
-  function sbUrl(path) {
-    const s = getSettings();
-    const base = s.supabaseUrl.trim().replace(/\/+$/,"");
-    return `${base}/rest/v1/${path}`;
-  }
-  async function sbFetchTasks() {
-    // For small team: fetch all tasks, client filters by week
-    const url = sbUrl("tasks?select=*&order=updated_at.desc&limit=5000");
-    const res = await fetch(url, { headers: sbHeaders() });
-    if (!res.ok) throw new Error(`Supabase read failed: ${res.status}`);
-    const data = await res.json();
-    return (Array.isArray(data) ? data : []).map(normalizeFromDB);
-  }
-  async function sbInsertTask(task) {
-    const url = sbUrl("tasks");
-    const payload = [denormalizeToDB(task)];
-    const res = await fetch(url, {
-      method: "POST",
-      headers: sbHeaders(),
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`Supabase insert failed: ${res.status}`);
-    const rows = await res.json();
-    return normalizeFromDB(rows[0]);
-  }
-  async function sbUpdateTask(task) {
-    const url = sbUrl(`tasks?id=eq.${encodeURIComponent(task.id)}`);
-    const payload = denormalizeToDB(task);
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: sbHeaders(),
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error(`Supabase update failed: ${res.status}`);
-    const rows = await res.json();
-    return normalizeFromDB(rows[0]);
-  }
-  async function sbDeleteTask(id) {
-    const url = sbUrl(`tasks?id=eq.${encodeURIComponent(id)}`);
-    const res = await fetch(url, {
-      method: "DELETE",
-      headers: sbHeaders(),
-    });
-    if (!res.ok) throw new Error(`Supabase delete failed: ${res.status}`);
+  function sbUrl(path){ return `${sbBase()}/rest/v1/${path}`; }
+
+  // ---- State ----
+  const state={
+    week: pickWeekStartISO(toISO(new Date())),
+    meId:"",
+    view:"tasks",
+    filterAssignee:"",
+    filterStatus:"",
+    filterGroup:"",
+    onlyOverdue:false,
+    tasks:[],
+    forecast: loadJSON(KEY_FC_LOCAL) || {}, // key: week|staff|metric
+    fcStaff:"",
+    fcEditAdmin:false,
+    syncing:false,
+    timer:null
+  };
+
+  // ---- DOM ----
+  const elWeek=$("#weekPicker"), elMe=$("#mePicker");
+  const btnAdd=$("#btnAdd"), btnExport=$("#btnExport"), btnLists=$("#btnLists");
+  const tabTasks=$("#tabTasks"), tabForecast=$("#tabForecast");
+  const viewTasks=$("#viewTasks"), viewForecast=$("#viewForecast");
+
+  const tbody=$("#tasksTbody");
+  const sumTotal=$("#sumTotal"), sumDone=$("#sumDone"), sumOverdue=$("#sumOverdue"), sumPct=$("#sumPct");
+  const filterAssignee=$("#filterAssignee"), filterStatus=$("#filterStatus"), filterGroup=$("#filterGroup");
+  const filterOverdue=$("#filterOverdue"), btnClear=$("#btnClearFilter");
+
+  const syncDot=$("#syncDot"), syncText=$("#syncText");
+
+  // Task modal
+  const taskBackdrop=$("#taskBackdrop"), taskClose=$("#taskClose"), taskTitle=$("#taskTitle"), taskForm=$("#taskForm"), btnCancel=$("#btnCancel");
+  const fmId=$("#fmId"), fmGroup=$("#fmGroup"), fmOwner=$("#fmOwner"), fmTitle=$("#fmTitle"), fmDeadline=$("#fmDeadline"), fmStatus=$("#fmStatus");
+  const fmPriority=$("#fmPriority"), fmCarry=$("#fmCarry"), fmKpi=$("#fmKpi"), fmMetric=$("#fmMetric"), fmCommit=$("#fmCommit"), fmActual=$("#fmActual"), fmNote=$("#fmNote");
+
+  // Lists modal
+  const listsBackdrop=$("#listsBackdrop"), listsClose=$("#listsClose"), btnListsCancel=$("#btnListsCancel"), btnListsSave=$("#btnListsSave");
+  const staffList=$("#staffList"), statusList=$("#statusList"), groupList=$("#groupList"), priorityList=$("#priorityList"), kpiList=$("#kpiList"), metricList=$("#metricList");
+  const btnAddStaff=$("#btnAddStaff"), btnAddStatus=$("#btnAddStatus"), btnAddGroup=$("#btnAddGroup"), btnAddPriority=$("#btnAddPriority"), btnAddKpi=$("#btnAddKpi"), btnAddMetric=$("#btnAddMetric");
+  const stMode=$("#stMode"), stInterval=$("#stInterval"), stUrl=$("#stUrl"), stKey=$("#stKey");
+
+  // Forecast
+  const fcStaffFilter=$("#fcStaffFilter"), btnFcImport=$("#btnFcImport"), btnFcToggle=$("#btnFcToggleEdit");
+  const fcImportFile=$("#fcImportFile");
+  const fcCards=$("#fcCards");
+
+  // ---- UI helpers ----
+  function mark(ok, text){
+    syncDot.classList.remove("ok","bad");
+    syncDot.classList.add(ok ? "ok" : "bad");
+    syncText.textContent = text;
   }
 
-  function normalizeFromDB(row) {
-    // DB -> app task
+  function closeModals(){
+    taskBackdrop.classList.remove("open");
+    listsBackdrop.classList.remove("open");
+    document.body.style.overflow="";
+  }
+  function openModal(el){
+    closeModals();
+    el.classList.add("open");
+    document.body.style.overflow="hidden";
+  }
+
+  function fillSelect(el, items, opts={}){
+    const {valueKey=null,labelFn=null,emptyLabel=null}=opts;
+    el.innerHTML="";
+    if(emptyLabel!==null){
+      const o=document.createElement("option");
+      o.value=""; o.textContent=emptyLabel;
+      el.appendChild(o);
+    }
+    for(const it of items){
+      const o=document.createElement("option");
+      o.value=valueKey ? String(it[valueKey]??"") : String(it??"");
+      o.textContent=labelFn ? labelFn(it) : String(it?.name ?? it);
+      el.appendChild(o);
+    }
+  }
+
+  function refreshDropdowns(){
+    const L=getLists();
+    const staff=L.staff||[];
+    fillSelect(elMe, staff, {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
+    fillSelect(fmOwner, staff, {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
+    fillSelect(filterAssignee, staff, {valueKey:"id", labelFn:s=>s.name, emptyLabel:"-- Lọc theo CB đầu mối --"});
+
+    fillSelect(fmGroup, L.groups||[], {emptyLabel:"-- Chọn --"});
+    fillSelect(filterGroup, L.groups||[], {emptyLabel:"-- Lọc theo nhóm việc --"});
+    fillSelect(fmStatus, L.statuses||[], {emptyLabel:"-- Chọn --"});
+    fillSelect(filterStatus, L.statuses||[], {emptyLabel:"-- Lọc theo trạng thái --"});
+    fillSelect(fmPriority, L.priorities||[], {emptyLabel:"-- Chọn --"});
+    fillSelect(fmCarry, ["Y","N"], {emptyLabel:"-- Chọn --"});
+    fillSelect(fmKpi, L.kpis||[], {emptyLabel:"-- (tuỳ chọn) --"});
+    fillSelect(fmMetric, L.outputMetrics||[], {emptyLabel:"-- (tuỳ chọn) --"});
+
+    // forecast staff filter (exclude ALL)
+    fillSelect(fcStaffFilter, staff.filter(s=>String(s.id)!=="54000600"), {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Xem tất cả cán bộ --"});
+
+    if(state.meId) elMe.value=state.meId;
+    if(state.filterAssignee) filterAssignee.value=state.filterAssignee;
+    if(state.filterStatus) filterStatus.value=state.filterStatus;
+    if(state.filterGroup) filterGroup.value=state.filterGroup;
+    if(state.fcStaff) fcStaffFilter.value=state.fcStaff;
+  }
+
+  // ---- Task logic ----
+  function isDone(status){ return String(status||"").toLowerCase()==="done"; }
+  function isOverdue(t){
+    if(!t.deadline || isDone(t.status)) return false;
+    const dl=parseISO(t.deadline); if(!dl) return false;
+    return dl < today0();
+  }
+
+  function visibleTasks(){
+    const week=state.week;
+    const base=state.tasks.filter(t=>{
+      if(t.weekStart===week) return true;
+      if(t.weekStart && t.weekStart<week && String(t.carryOver||"Y").toUpperCase()==="Y" && !isDone(t.status)) return true;
+      return false;
+    });
+    return base.filter(t=>{
+      if(state.filterAssignee && String(t.ownerId)!==String(state.filterAssignee)) return false;
+      if(state.filterStatus && String(t.status)!==String(state.filterStatus)) return false;
+      if(state.filterGroup && String(t.group)!==String(state.filterGroup)) return false;
+      if(state.onlyOverdue && !isOverdue(t)) return false;
+      return true;
+    }).map(t=>{
+      const s=staffById(t.ownerId);
+      return {...t, ownerName: s? s.name : (t.ownerName||t.ownerId)};
+    }).sort((a,b)=>{
+      const ao=isOverdue(a)?0:1, bo=isOverdue(b)?0:1;
+      if(ao!==bo) return ao-bo;
+      return (a.deadline||"").localeCompare(b.deadline||"");
+    });
+  }
+
+  function renderTasks(){
+    const vis=visibleTasks();
+    const total=vis.length;
+    const done=vis.filter(t=>isDone(t.status)).length;
+    const overdue=vis.filter(t=>isOverdue(t)).length;
+    sumTotal.textContent=String(total);
+    sumDone.textContent=String(done);
+    sumOverdue.textContent=String(overdue);
+    sumPct.textContent= total ? `${Math.round(done/total*100)}%` : "0%";
+
+    if(!vis.length){
+      tbody.innerHTML=`<tr><td colspan="8" style="padding:18px;color:#5b6b67">Chưa có công việc trong tuần này. Bấm “+ Thêm việc”.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML=vis.map(t=>{
+      const meta=[
+        t.kpi?`KPI: ${escapeHtml(t.kpi)}`:"",
+        t.metric?`Metric: ${escapeHtml(t.metric)}`:"",
+        t.commit!==""?`Commit: ${escapeHtml(t.commit)}`:"",
+        t.actual!==""?`Actual: ${escapeHtml(t.actual)}`:"",
+        `Priority: ${escapeHtml(t.priority||"")}`,
+        `CarryOver: ${escapeHtml(t.carryOver||"Y")}`,
+        t.assignedByName?`Giao bởi: ${escapeHtml(t.assignedByName)}`:""
+      ].filter(Boolean).join(" • ");
+      const idLabel=t.seq?`#${t.seq}`:(t.id||"").slice(0,8);
+      return `<tr class="${isOverdue(t)?"row-overdue":""}">
+        <td class="fcNum">${escapeHtml(idLabel)}</td>
+        <td>${escapeHtml(t.group||"")}</td>
+        <td><div style="font-weight:800">${escapeHtml(t.title||"")}</div>
+            <div style="margin-top:6px;color:#5b6b67;font-size:12px">${escapeHtml(meta)}</div></td>
+        <td class="fcNum">${escapeHtml(fmtDDMMYYYY(t.deadline))}</td>
+        <td>${escapeHtml(t.ownerName||t.ownerId||"")}</td>
+        <td>${escapeHtml(t.status||"")}</td>
+        <td>${escapeHtml(t.note||"")}</td>
+        <td>
+          <button class="btn-mini" data-act="edit" data-id="${escapeHtml(t.id)}">Sửa</button>
+          <button class="btn-mini danger" data-act="del" data-id="${escapeHtml(t.id)}">Xoá</button>
+        </td>
+      </tr>`;
+    }).join("");
+  }
+
+  // ---- Forecast logic (card view) ----
+  function fcKey(week, staffId, metricKey){ return `${week}|${staffId}|${metricKey}`; }
+  function getFcRow(week, staffId, metricKey){
+    const k=fcKey(week, staffId, metricKey);
+    return state.forecast[k] || {weekStart:week, staffId, metricKey, actual:null, quarterPlan:null, weekPlan:null, note:""};
+  }
+  function setFcRow(row){
+    state.forecast[fcKey(row.weekStart,row.staffId,row.metricKey)] = row;
+  }
+
+  function computeDeltaGap(row, kind){
+    const a=numOrNull(row.actual), w=numOrNull(row.weekPlan), q=numOrNull(row.quarterPlan);
+    const delta = (kind==="5col") ? ((a!==null && w!==null) ? (w-a) : null) : null;
+    const gap = (a!==null && q!==null) ? (a-q) : null;
+    return {a,w,q,delta,gap};
+  }
+
+  function sumMetric(metricKey){
+    const L=getLists();
+    const staff=L.staff.filter(s=>String(s.id)!=="54000600");
+    let A=0,W=0,Q=0,ha=false,hw=false,hq=false;
+    for(const s of staff){
+      const row=getFcRow(state.week, s.id, metricKey);
+      const a=numOrNull(row.actual), w=numOrNull(row.weekPlan), q=numOrNull(row.quarterPlan);
+      if(a!==null){A+=a;ha=true;}
+      if(w!==null){W+=w;hw=true;}
+      if(q!==null){Q+=q;hq=true;}
+    }
+    return {A:ha?A:null, W:hw?W:null, Q:hq?Q:null};
+  }
+
+  function renderForecastCards(){
+    const L=getLists();
+    const staffAll=L.staff.filter(s=>String(s.id)!=="54000600");
+    const metrics=L.forecastMetrics || [];
+
+    const visibleStaff = state.fcStaff
+      ? staffAll.filter(s=>String(s.id)===String(state.fcStaff))
+      : staffAll;
+
+    const meIsMgr=isManager(state.meId);
+    const allowAdmin = state.fcEditAdmin && meIsMgr;
+
+    const cards=[];
+
+    // Manager total card
+    if(meIsMgr && !state.fcStaff){
+      const rowsHtml = metrics.map(m=>{
+        const sums = sumMetric(m.key);
+        const a=sums.A, w=sums.W, q=sums.Q;
+        const delta = (m.kind==="5col" && a!==null && w!==null) ? (w-a) : null;
+        const gap = (a!==null && q!==null) ? (a-q) : null;
+        const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
+        const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
+        return `<tr>
+          <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
+          <td class="fcNum">${a===null?"":fmtNum(a)}</td>
+          <td class="fcNum">${w===null?"":fmtNum(w)}</td>
+          <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
+          <td class="fcNum">${q===null?"":fmtNum(q)}</td>
+          <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
+        </tr>`;
+      }).join("");
+
+      cards.push(`<div class="fcCard">
+        <div class="fcCardHead">
+          <div>
+            <div class="fcTitle">TỔNG PHÒNG</div>
+            <div class="fcSubtitle">Tổng hợp theo tất cả cán bộ • tuần ${escapeHtml(fmtDDMMYYYY(state.week))}</div>
+          </div>
+          <div class="fcBadge">Quản lý</div>
+        </div>
+        <table class="fcMini">
+          <thead><tr>
+            <th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>`);
+    }
+
+    // Staff cards
+    for(const s of visibleStaff){
+      const rowsHtml = metrics.map(m=>{
+        const row=getFcRow(state.week, s.id, m.key);
+        const {a,w,q,delta,gap} = computeDeltaGap(row, m.kind);
+        const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
+        const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
+
+        const canEditWeek = (String(state.meId)===String(s.id)) || meIsMgr;
+        const roWeek = !canEditWeek;
+        const roAdmin = !allowAdmin;
+
+        return `<tr>
+          <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
+          <td><input data-fc="1" data-field="actual" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                type="number" step="any" value="${a===null?"":a}" ${roAdmin?"readonly":""}></td>
+          <td><input data-fc="1" data-field="weekPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                type="number" step="any" value="${w===null?"":w}" ${roWeek?"readonly":""}></td>
+          <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
+          <td><input data-fc="1" data-field="quarterPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                type="number" step="any" value="${q===null?"":q}" ${roAdmin?"readonly":""}></td>
+          <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
+        </tr>`;
+      }).join("");
+
+      const badge = (String(state.meId)===String(s.id)) ? "Tôi" : (meIsMgr ? "Xem/Giao" : "CB");
+      cards.push(`<div class="fcCard">
+        <div class="fcCardHead">
+          <div>
+            <div class="fcTitle">${escapeHtml(s.id)} - ${escapeHtml(s.name)}</div>
+            <div class="fcSubtitle">Nhập KH Tuần • Delta/GAP tự tính</div>
+          </div>
+          <div class="fcBadge">${escapeHtml(badge)}</div>
+        </div>
+        <table class="fcMini">
+          <thead><tr>
+            <th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>`);
+    }
+
+    fcCards.innerHTML = cards.join("");
+  }
+
+  // ---- Forecast save (debounced) ----
+  const fcTimers = new Map();
+  function scheduleSaveFc(staffId, metricKey){
+    const k=`${staffId}|${metricKey}`;
+    if(fcTimers.has(k)) clearTimeout(fcTimers.get(k));
+    fcTimers.set(k, setTimeout(()=>{ fcTimers.delete(k); saveForecastRow(staffId, metricKey); }, 450));
+  }
+
+  async function sbUpsertForecastRow(row){
+    const url = sbUrl("weekly_forecast?on_conflict=week_start,staff_id,metric_key");
+    const headers = sbHeaders();
+    headers["Prefer"] = "return=representation,resolution=merge-duplicates";
+    const payload=[{
+      week_start: row.weekStart,
+      staff_id: row.staffId,
+      metric_key: row.metricKey,
+      actual: row.actual,
+      quarter_plan: row.quarterPlan,
+      week_plan: row.weekPlan,
+      note: row.note || null,
+      updated_by_id: state.meId || null,
+      updated_by_name: (staffById(state.meId)||{}).name || null,
+      updated_at: new Date().toISOString()
+    }];
+    const res = await fetch(url, {method:"POST", headers, body: JSON.stringify(payload)});
+    if(!res.ok) throw new Error("upsert forecast failed " + res.status);
+  }
+
+  async function saveForecastRow(staffId, metricKey){
+    // Always save locally (so reload is instant)
+    saveJSON(KEY_FC_LOCAL, state.forecast);
+
+    const s=getSettings();
+    if(s.storageMode==="supabase"){
+      try{
+        const row=getFcRow(state.week, staffId, metricKey);
+        await sbUpsertForecastRow(row);
+        mark(true, "supabase • saved");
+      }catch(e){
+        console.error(e);
+        mark(false, "supabase • lỗi ghi");
+      }
+    }else{
+      mark(true, "local • saved");
+    }
+  }
+
+  // ---- Import forecast (Actual + QuarterPlan) from Excel sample ----
+  async function importForecastExcel(file){
+    const data = new Uint8Array(await file.arrayBuffer());
+    const wb = XLSX.read(data, {type:"array"});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true});
+    const staffSet = new Set(getLists().staff.map(s=>String(s.id)));
+
+    // Mapping based on Du kien tuan.xlsx columns (0-based):
+    const map = [
+      { key:"HDV_CUOI_KY", actual:2, quarter:5 },
+      { key:"DU_NO_CUOI_KY", actual:7, quarter:10 },
+      { key:"TK_HKD", actual:12, quarter:14 },
+      { key:"THE_TD", actual:16, quarter:18 },
+      { key:"HH_BAO_HIEM", actual:20, quarter:22 },
+      { key:"SMARTBANKING", actual:24, quarter:26 },
+    ];
+
+    let applied=0;
+    for(const r of rows){
+      const colB = r[1];
+      if(!colB) continue;
+      const m = /^\s*(\d{6,})\s*[-–]\s*/.exec(String(colB));
+      if(!m) continue;
+      const staffId = m[1];
+      if(!staffSet.has(String(staffId))) continue;
+
+      for(const mm of map){
+        const row=getFcRow(state.week, staffId, mm.key);
+        const a=numOrNull(r[mm.actual]);
+        const q=numOrNull(r[mm.quarter]);
+        if(a!==null) row.actual=a;
+        if(q!==null) row.quarterPlan=q;
+        setFcRow(row);
+        applied++;
+        await saveForecastRow(staffId, mm.key);
+      }
+    }
+    return applied;
+  }
+
+  // ---- Supabase tasks + forecast fetch ----
+  function normalizeTask(row){
     return {
       id: row.id,
       seq: row.seq ?? null,
@@ -351,11 +530,10 @@
       note: row.note || "",
       assignedById: row.assigned_by_id || "",
       assignedByName: row.assigned_by_name || "",
-      createdAt: row.created_at || "",
-      updatedAt: row.updated_at || "",
+      updatedAt: row.updated_at || ""
     };
   }
-  function denormalizeToDB(t) {
+  function denormTask(t){
     return {
       id: t.id,
       seq: t.seq ?? null,
@@ -367,758 +545,644 @@
       priority: t.priority,
       kpi: t.kpi || null,
       metric: t.metric || null,
-      commit: t.commit === "" ? null : t.commit,
-      actual: t.actual === "" ? null : t.actual,
+      commit: t.commit===""?null:t.commit,
+      actual: t.actual===""?null:t.actual,
       carry_over: t.carryOver || "Y",
       owner_id: t.ownerId,
       owner_name: t.ownerName,
       note: t.note || null,
       assigned_by_id: t.assignedById || null,
       assigned_by_name: t.assignedByName || null,
+      updated_at: new Date().toISOString()
     };
   }
 
-  // ---------- Visible tasks logic ----------
-  function getVisibleTasks() {
-    const weekISO = state.weekStartISO;
-    const lists = getLists();
+  async function sbFetchTasks(){
+    const res=await fetch(sbUrl("tasks?select=*&order=updated_at.desc&limit=5000"), {headers: sbHeaders()});
+    if(!res.ok) throw new Error("read tasks "+res.status);
+    const arr=await res.json();
+    return (Array.isArray(arr)?arr:[]).map(normalizeTask);
+  }
+  async function sbInsertTask(t){
+    const res=await fetch(sbUrl("tasks"), {method:"POST", headers: sbHeaders(), body: JSON.stringify([denormTask(t)])});
+    if(!res.ok) throw new Error("insert task "+res.status);
+    const rows=await res.json();
+    return normalizeTask(rows[0]);
+  }
+  async function sbUpdateTask(t){
+    const res=await fetch(sbUrl(`tasks?id=eq.${encodeURIComponent(t.id)}`), {method:"PATCH", headers: sbHeaders(), body: JSON.stringify(denormTask(t))});
+    if(!res.ok) throw new Error("update task "+res.status);
+    const rows=await res.json();
+    return normalizeTask(rows[0]);
+  }
+  async function sbDeleteTask(id){
+    const res=await fetch(sbUrl(`tasks?id=eq.${encodeURIComponent(id)}`), {method:"DELETE", headers: sbHeaders()});
+    if(!res.ok) throw new Error("delete task "+res.status);
+  }
 
-    const base = state.tasks.filter((t) => {
-      if (!weekISO) return false;
-      if (t.weekStart === weekISO) return true;
-      if (t.weekStart && t.weekStart < weekISO && String(t.carryOver || "Y").toUpperCase() === "Y" && !isDone(t.status)) return true;
-      return false;
-    });
-
-    const filtered = base.filter((t) => {
-      if (state.filterAssignee && String(t.ownerId) !== String(state.filterAssignee)) return false;
-      if (state.filterStatus && String(t.status) !== String(state.filterStatus)) return false;
-      if (state.filterGroup && String(t.group) !== String(state.filterGroup)) return false;
-      if (state.onlyOverdue && !isOverdue(t)) return false;
-      return true;
-    });
-
-    return filtered.map((t) => {
-      const owner = staffById(lists, t.ownerId);
-      return {
-        ...t,
-        ownerName: owner ? owner.name : (t.ownerName || t.ownerId),
+  async function sbFetchForecastWeek(weekISO){
+    const res=await fetch(sbUrl(`weekly_forecast?select=*&week_start=eq.${encodeURIComponent(weekISO)}&limit=5000`), {headers: sbHeaders()});
+    if(!res.ok) throw new Error("read forecast "+res.status);
+    const rows=await res.json();
+    for(const r of (Array.isArray(rows)?rows:[])){
+      const row={
+        weekStart: String(r.week_start),
+        staffId: r.staff_id,
+        metricKey: r.metric_key,
+        actual: r.actual ?? null,
+        quarterPlan: r.quarter_plan ?? null,
+        weekPlan: r.week_plan ?? null,
+        note: r.note || ""
       };
-    }).sort((a,b) => {
-      const ao = isOverdue(a) ? 0 : 1;
-      const bo = isOverdue(b) ? 0 : 1;
-      if (ao !== bo) return ao - bo;
-      if ((a.deadline || "") !== (b.deadline || "")) return (a.deadline || "").localeCompare(b.deadline || "");
-      const as = Number(a.seq ?? 0), bs = Number(b.seq ?? 0);
-      if (as !== bs) return bs - as;
-      return (a.updatedAt || "").localeCompare(b.updatedAt || "");
-    });
-  }
-
-  // ---------- Render ----------
-  function renderSummary(visible) {
-    const total = visible.length;
-    const done = visible.filter((t) => isDone(t.status)).length;
-    const overdue = visible.filter((t) => isOverdue(t)).length;
-    const pct = total ? Math.round((done / total) * 100) : 0;
-    elSumTotal.textContent = String(total);
-    elSumDone.textContent = String(done);
-    elSumOverdue.textContent = String(overdue);
-    elSumPct.textContent = `${pct}%`;
-  }
-
-  function renderTable() {
-    const visible = getVisibleTasks();
-    renderSummary(visible);
-
-    if (!visible.length) {
-      elTblBody.innerHTML = `<tr><td colspan="8" style="color:var(--muted);padding:18px">Chưa có công việc trong tuần này. Bấm “+ Thêm việc”.</td></tr>`;
-      return;
+      setFcRow(row);
     }
-
-    const rows = visible.map((t) => {
-      const overdue = isOverdue(t);
-      const idLabel = t.seq ? `#${t.seq}` : (t.id ? t.id.slice(0,8) : "");
-      const badge = overdue ? `<span class="badge overdue">Quá hạn</span>` : "";
-      const note = t.note ? escapeHtml(t.note) : "";
-      return `
-      <tr>
-        <td data-label="ID"><span class="badge">${escapeHtml(idLabel)}</span> ${badge}</td>
-        <td data-label="Nhóm công việc">${escapeHtml(t.group || "")}</td>
-        <td data-label="Công việc / Hoạt động">${escapeHtml(t.title || "")}
-          <div class="smallHelp">
-            ${t.kpi ? `KPI: <b>${escapeHtml(t.kpi)}</b> • ` : ""}
-            ${t.metric ? `Metric: <b>${escapeHtml(t.metric)}</b> • ` : ""}
-            ${t.commit !== "" && t.commit !== null ? `Commit: <b>${escapeHtml(t.commit)}</b> • ` : ""}
-            ${t.actual !== "" && t.actual !== null ? `Actual: <b>${escapeHtml(t.actual)}</b> • ` : ""}
-            Priority: <b>${escapeHtml(t.priority || "")}</b> • CarryOver: <b>${escapeHtml(t.carryOver || "Y")}</b>
-            ${t.assignedByName ? ` • Giao bởi: <b>${escapeHtml(t.assignedByName)}</b>` : ""}
-          </div>
-        </td>
-        <td data-label="Deadline">${escapeHtml(formatDDMMYYYY(t.deadline))}</td>
-        <td data-label="CB đầu mối">${escapeHtml(t.ownerName || t.ownerId || "")}</td>
-        <td data-label="Trạng thái">${escapeHtml(t.status || "")}</td>
-        <td data-label="Kết quả / Ghi chú">${note}</td>
-        <td data-label="Tác vụ">
-          <div class="actions">
-            <button class="btnSm" data-act="edit" data-id="${escapeHtml(t.id)}">Sửa</button>
-            <button class="btnSm danger" data-act="del" data-id="${escapeHtml(t.id)}">Xoá</button>
-          </div>
-        </td>
-      </tr>`;
-    }).join("");
-
-    elTblBody.innerHTML = rows;
+    saveJSON(KEY_FC_LOCAL, state.forecast);
   }
 
-  // ---------- Sync indicator ----------
-  function setSyncUI({ ok=true, text="" }={}) {
-    syncDot.classList.toggle("warn", !ok);
-    syncText.textContent = text;
-  }
-  function formatTime(d) {
-    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-  }
-
-  // ---------- CRUD ----------
-  function openTaskModal(mode, task=null) {
-    openBackdrop(taskBackdrop);
-    taskTitle.textContent = (mode === "edit") ? "Sửa công việc" : "Thêm công việc";
-    taskForm.reset();
-
-    // defaults
-    fmCarry.value = "Y";
-    fmPriority.value = "B";
-    fmStatus.value = "Not started";
-    fmOwner.value = state.meId || "";
-
-    fmId.value = task ? String(task.id) : "";
-
-    if (task) {
-      fmGroup.value = task.group || "";
-      fmOwner.value = task.ownerId || "";
-      fmTitle.value = task.title || "";
-      fmDeadline.value = task.deadline || "";
-      fmStatus.value = task.status || "Not started";
-      fmPriority.value = task.priority || "B";
-      fmCarry.value = (task.carryOver || "Y").toUpperCase();
-      fmKpi.value = task.kpi || "";
-      fmMetric.value = task.metric || "";
-      fmCommit.value = (task.commit ?? "") === null ? "" : String(task.commit ?? "");
-      fmActual.value = (task.actual ?? "") === null ? "" : String(task.actual ?? "");
-      fmNote.value = task.note || "";
+  // ---- Sync ----
+  async function syncAll(){
+    if(state.syncing) return;
+    state.syncing=true;
+    try{
+      const s=getSettings();
+      if(s.storageMode==="supabase"){
+        state.tasks = await sbFetchTasks();
+        await sbFetchForecastWeek(state.week);
+        mark(true, `supabase • synced • ${new Date().toLocaleTimeString("vi-VN")}`);
+      }else{
+        state.tasks = loadJSON(KEY_TASKS_LOCAL) || [];
+        state.forecast = loadJSON(KEY_FC_LOCAL) || state.forecast || {};
+        mark(true, "local • loaded");
+      }
+      render();
+    }catch(e){
+      console.error(e);
+      mark(false, "đồng bộ lỗi");
+    }finally{
+      state.syncing=false;
     }
   }
 
-  function validateTaskForm() {
-    const errs = [];
-    if (!state.weekStartISO) errs.push("Bạn chưa chọn Tuần.");
-    if (!state.meId) errs.push("Bạn chưa chọn “Tôi là”.");
-    if (!fmGroup.value) errs.push("Bạn chưa chọn Nhóm công việc.");
-    if (!fmOwner.value) errs.push("Bạn chưa chọn CB đầu mối.");
-    if (!fmTitle.value.trim()) errs.push("Bạn chưa nhập Công việc / Hoạt động.");
-    if (!fmDeadline.value) errs.push("Bạn chưa chọn Deadline.");
-    if (!fmStatus.value) errs.push("Bạn chưa chọn Trạng thái.");
-    return errs;
+  function setupTimer(){
+    if(state.timer) clearInterval(state.timer);
+    const sec=getSettings().syncSeconds;
+    state.timer=setInterval(()=>{ if(!document.hidden) syncAll(); }, sec*1000);
   }
 
-  function nextSeq(tasks) {
-    let max = 0;
-    for (const t of tasks) {
-      const n = Number(t.seq || 0);
-      if (!Number.isNaN(n)) max = Math.max(max, n);
+  // ---- Task modal ----
+  function nextSeq(){ return state.tasks.reduce((m,t)=>Math.max(m, Number(t.seq||0)),0)+1; }
+  function newId(){ return `t_${Math.random().toString(36).slice(2,10)}_${Date.now()}`; }
+
+  function openTask(task){
+    const L=getLists();
+    if(task){
+      taskTitle.textContent="Sửa công việc";
+      fmId.value=task.id;
+      fmGroup.value=task.group;
+      fmOwner.value=task.ownerId;
+      fmTitle.value=task.title;
+      fmDeadline.value=task.deadline||"";
+      fmStatus.value=task.status;
+      fmPriority.value=task.priority||"B";
+      fmCarry.value=task.carryOver||"Y";
+      fmKpi.value=task.kpi||"";
+      fmMetric.value=task.metric||"";
+      fmCommit.value=task.commit===""?"":String(task.commit);
+      fmActual.value=task.actual===""?"":String(task.actual);
+      fmNote.value=task.note||"";
+    }else{
+      taskTitle.textContent="Thêm công việc";
+      fmId.value="";
+      fmGroup.value="";
+      fmOwner.value=state.meId||"";
+      fmTitle.value="";
+      fmDeadline.value=state.week;
+      fmStatus.value=(L.statuses||["Not started"])[0];
+      fmPriority.value="B";
+      fmCarry.value="Y";
+      fmKpi.value="";
+      fmMetric.value="";
+      fmCommit.value="";
+      fmActual.value="";
+      fmNote.value="";
     }
-    return max + 1;
+    openModal(taskBackdrop);
   }
 
-  async function upsertTask() {
-    const errs = validateTaskForm();
-    if (errs.length) {
-      alert(errs.join("\n"));
-      return;
-    }
-
-    const lists = getLists();
-    const owner = staffById(lists, fmOwner.value);
-    const me = staffById(lists, state.meId);
-
-    const isEdit = !!fmId.value;
-    const nowIso = new Date().toISOString();
-
-    const t = {
-      id: isEdit ? String(fmId.value) : (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)),
-      seq: isEdit ? null : nextSeq(state.tasks),
-      weekStart: state.weekStartISO,
+  async function saveTask(e){
+    e.preventDefault();
+    const me=staffById(state.meId);
+    const isNew=!fmId.value;
+    const id=isNew?newId():fmId.value;
+    const t={
+      id,
+      __isNew:isNew,
+      seq: isNew? nextSeq() : (state.tasks.find(x=>x.id===id)?.seq ?? null),
+      weekStart: state.week,
       group: fmGroup.value,
       title: fmTitle.value.trim(),
       deadline: fmDeadline.value,
       status: fmStatus.value,
-      priority: fmPriority.value || "B",
-      kpi: fmKpi.value || "",
-      metric: fmMetric.value || "",
-      commit: fmCommit.value === "" ? "" : Number(fmCommit.value),
-      actual: fmActual.value === "" ? "" : Number(fmActual.value),
-      carryOver: (fmCarry.value || "Y").toUpperCase(),
-      ownerId: String(fmOwner.value),
-      ownerName: owner ? owner.name : "",
-      note: fmNote.value.trim(),
-      assignedById: state.meId || "",
-      assignedByName: me ? me.name : "",
-      updatedAt: nowIso,
+      priority: fmPriority.value||"B",
+      kpi: fmKpi.value||"",
+      metric: fmMetric.value||"",
+      commit: fmCommit.value===""?"":Number(fmCommit.value),
+      actual: fmActual.value===""?"":Number(fmActual.value),
+      carryOver: fmCarry.value||"Y",
+      ownerId: fmOwner.value,
+      ownerName: (staffById(fmOwner.value)||{}).name||"",
+      note: fmNote.value||"",
+      assignedById: isNew ? (state.meId||"") : (state.tasks.find(x=>x.id===id)?.assignedById||""),
+      assignedByName: isNew ? (me?.name||"") : (state.tasks.find(x=>x.id===id)?.assignedByName||""),
+      updatedAt: new Date().toISOString()
     };
 
-    const settings = getSettings();
-    try {
-      setSyncUI({ ok:true, text:`${settings.storageMode} • đang lưu...` });
-      if (settings.storageMode === "supabase") {
-        if (isEdit) {
-          const saved = await sbUpdateTask(t);
-          state.tasks = state.tasks.map(x => x.id === saved.id ? saved : x);
-        } else {
-          const saved = await sbInsertTask(t);
-          state.tasks = [saved, ...state.tasks];
-        }
-      } else {
-        if (isEdit) {
-          state.tasks = state.tasks.map(x => x.id === t.id ? {...x, ...t} : x);
-        } else {
-          state.tasks = [t, ...state.tasks];
-        }
-        saveTasksLocal(state.tasks);
+    const s=getSettings();
+    try{
+      let saved=t;
+      if(s.storageMode==="supabase"){
+        saved = isNew ? await sbInsertTask(t) : await sbUpdateTask(t);
+      }else{
+        const arr=state.tasks.slice();
+        const idx=arr.findIndex(x=>x.id===t.id);
+        if(idx>=0) arr[idx]=t; else arr.unshift(t);
+        state.tasks=arr;
+        saveJSON(KEY_TASKS_LOCAL, arr);
       }
-      closeAllModals();
-      renderTable();
-      markSynced(true);
-    } catch (e) {
-      console.error(e);
-      alert("Lưu không thành công. Kiểm tra Storage mode / Supabase URL / anon key.\n" + (e?.message || e));
-      markSynced(false);
+      const idx2=state.tasks.findIndex(x=>x.id===saved.id);
+      if(idx2>=0) state.tasks[idx2]=saved; else state.tasks.unshift(saved);
+
+      closeModals();
+      renderTasks();
+      mark(true, s.storageMode==="supabase" ? "supabase • ghi OK" : "local • saved");
+    }catch(err){
+      console.error(err);
+      alert("Không lưu được. Kiểm tra Supabase/RLS hoặc mạng.");
     }
   }
 
-  async function deleteTask(id) {
-    const settings = getSettings();
-    if (!confirm("Xoá công việc này?")) return;
-
-    try {
-      setSyncUI({ ok:true, text:`${settings.storageMode} • đang xoá...` });
-      if (settings.storageMode === "supabase") {
-        await sbDeleteTask(id);
-        state.tasks = state.tasks.filter(x => x.id !== id);
-      } else {
-        state.tasks = state.tasks.filter(x => x.id !== id);
-        saveTasksLocal(state.tasks);
+  async function delTask(id){
+    const s=getSettings();
+    try{
+      if(s.storageMode==="supabase") await sbDeleteTask(id);
+      else{
+        state.tasks=state.tasks.filter(t=>t.id!==id);
+        saveJSON(KEY_TASKS_LOCAL, state.tasks);
       }
-      renderTable();
-      markSynced(true);
-    } catch (e) {
+      state.tasks=state.tasks.filter(t=>t.id!==id);
+      renderTasks();
+    }catch(e){
       console.error(e);
-      alert("Xoá không thành công. " + (e?.message || e));
-      markSynced(false);
+      alert("Không xoá được. Kiểm tra Supabase/RLS hoặc mạng.");
     }
   }
 
-  // ---------- Export report ----------
-  function buildWeeklyReport() {
-    const visible = getVisibleTasks();
-    const week = state.weekStartISO || "";
-    const lists = getLists();
+  // ---- Lists modal helpers ----
+  function mkRow2(aVal="", bVal=""){
+    const row=document.createElement("div");
+    row.className="listRow";
+    const a=document.createElement("input"); a.value=aVal;
+    const b=document.createElement("input"); b.value=bVal;
+    const del=document.createElement("button"); del.className="delBtn"; del.textContent="Xoá"; del.onclick=()=>row.remove();
+    row.appendChild(a); row.appendChild(b); row.appendChild(del);
+    return row;
+  }
+  function mkRow1(val=""){
+    const row=document.createElement("div");
+    row.className="listRow";
+    row.style.gridTemplateColumns="1fr 80px";
+    const a=document.createElement("input"); a.value=val;
+    const del=document.createElement("button"); del.className="delBtn"; del.textContent="Xoá"; del.onclick=()=>row.remove();
+    row.appendChild(a); row.appendChild(del);
+    return row;
+  }
 
-    const sheetTasks = [
-      ["WeekStart", week],
-      [],
-      ["Seq","Group","Title","Deadline(dd/mm/yyyy)","OwnerID","OwnerName","Status","KPI","Metric","Commit","Actual","Priority","CarryOver","AssignedByID","AssignedByName","Note"]
-    ];
-    for (const t of visible) {
-      sheetTasks.push([
-        t.seq ?? "",
-        t.group || "",
-        t.title || "",
-        formatDDMMYYYY(t.deadline),
-        t.ownerId || "",
-        t.ownerName || "",
-        t.status || "",
-        t.kpi || "",
-        t.metric || "",
-        t.commit ?? "",
-        t.actual ?? "",
-        t.priority || "",
-        t.carryOver || "",
-        t.assignedById || "",
-        t.assignedByName || "",
-        t.note || "",
-      ]);
+  function setListTab(name){
+    $$(".tabs [data-listtab]").forEach(btn=>btn.classList.toggle("active", btn.dataset.listtab===name));
+    $("#tab_staff").style.display = (name==="staff") ? "" : "none";
+    $("#tab_others").style.display = (name==="others") ? "" : "none";
+    $("#tab_storage").style.display = (name==="storage") ? "" : "none";
+  }
+
+  function openLists(){
+    const L=getLists();
+    staffList.innerHTML=""; (L.staff||[]).forEach(s=>staffList.appendChild(mkRow2(String(s.id||""), String(s.name||""))));
+    statusList.innerHTML=""; (L.statuses||[]).forEach(x=>statusList.appendChild(mkRow1(String(x))));
+    groupList.innerHTML=""; (L.groups||[]).forEach(x=>groupList.appendChild(mkRow1(String(x))));
+    priorityList.innerHTML=""; (L.priorities||[]).forEach(x=>priorityList.appendChild(mkRow1(String(x))));
+    kpiList.innerHTML=""; (L.kpis||[]).forEach(x=>kpiList.appendChild(mkRow1(String(x))));
+    metricList.innerHTML=""; (L.outputMetrics||[]).forEach(x=>metricList.appendChild(mkRow1(String(x))));
+
+    const S=getSettings();
+    stMode.value=S.storageMode;
+    stInterval.value=String(S.syncSeconds);
+    stUrl.value=S.supabaseUrl||"";
+    stKey.value=S.supabaseAnonKey||"";
+    setListTab("staff");
+    openModal(listsBackdrop);
+  }
+
+  function saveLists(){
+    const staffArr=[];
+    for(const row of Array.from(staffList.querySelectorAll(".listRow"))){
+      const ins=row.querySelectorAll("input");
+      const id=String(ins[0].value||"").trim();
+      const name=String(ins[1].value||"").trim();
+      if(id && name) staffArr.push({id,name});
     }
+    const seen=new Set(); const staffUniq=[];
+    for(const s of staffArr){ if(seen.has(s.id)) continue; seen.add(s.id); staffUniq.push(s); }
 
-    const byStaff = {};
-    for (const t of visible) {
-      const sid = String(t.ownerId || "");
-      if (!byStaff[sid]) byStaff[sid] = { total:0, done:0, overdue:0, commit:0, actual:0 };
-      byStaff[sid].total += 1;
-      if (isDone(t.status)) byStaff[sid].done += 1;
-      if (isOverdue(t)) byStaff[sid].overdue += 1;
-      const c = Number(t.commit);
-      if (!Number.isNaN(c)) byStaff[sid].commit += c;
-      const a = Number(t.actual);
-      if (!Number.isNaN(a)) byStaff[sid].actual += a;
-    }
+    const read1=(container)=>Array.from(new Set(Array.from(container.querySelectorAll("input")).map(i=>String(i.value||"").trim()).filter(Boolean)));
+    const newLists={
+      staff: staffUniq.length?staffUniq:getLists().staff,
+      statuses: read1(statusList),
+      groups: read1(groupList),
+      priorities: read1(priorityList),
+      kpis: read1(kpiList),
+      outputMetrics: read1(metricList),
+      forecastMetrics: getLists().forecastMetrics || CFG.forecastMetrics || []
+    };
+    saveJSON(KEY_LISTS, newLists);
 
-    const sheetSummary = [
-      ["WeekStart", week],
-      [],
-      ["OwnerID","OwnerName","TotalTasks","Done","Overdue","%Complete","SumCommit","SumActual"]
-    ];
-    for (const s of lists.staff) {
-      const sid = String(s.id);
-      const m = byStaff[sid] || { total:0, done:0, overdue:0, commit:0, actual:0 };
-      const pct = m.total ? Math.round((m.done / m.total) * 100) : 0;
-      sheetSummary.push([sid, s.name, m.total, m.done, m.overdue, `${pct}%`, m.commit, m.actual]);
-    }
-
-    return { sheetTasks, sheetSummary, week };
-  }
-
-  function downloadBlob(filename, blob) {
-    const a = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-      a.remove();
-    }, 0);
-  }
-
-  function exportWeekly() {
-    const { sheetTasks, sheetSummary, week } = buildWeeklyReport();
-    const fname = `BaoCao_Tuan_${week || "NA"}.xlsx`;
-
-    if (window.XLSX && window.XLSX.utils) {
-      const wb = window.XLSX.utils.book_new();
-      const ws1 = window.XLSX.utils.aoa_to_sheet(sheetTasks);
-      const ws2 = window.XLSX.utils.aoa_to_sheet(sheetSummary);
-      window.XLSX.utils.book_append_sheet(wb, ws1, "TASKS_WEEK");
-      window.XLSX.utils.book_append_sheet(wb, ws2, "SUMMARY_BY_STAFF");
-      window.XLSX.writeFile(wb, fname);
-      return;
-    }
-
-    const toCSV = (aoa) => aoa.map((row) => row.map((cell) => {
-      const s = String(cell ?? "");
-      if (s.includes('"') || s.includes(",") || s.includes("\n")) return `"${s.replaceAll('"','""')}"`;
-      return s;
-    }).join(",")).join("\n");
-
-    downloadBlob(`TASKS_WEEK_${week}.csv`, new Blob([toCSV(sheetTasks)], { type:"text/csv;charset=utf-8" }));
-    downloadBlob(`SUMMARY_BY_STAFF_${week}.csv`, new Blob([toCSV(sheetSummary)], { type:"text/csv;charset=utf-8" }));
-    alert("Không tải được thư viện XLSX (CDN bị chặn). Hệ thống đã xuất CSV thay thế.");
-  }
-
-  // ---------- Lists modal render ----------
-  function makeRow2(a, b, onDel) {
-    const row = document.createElement("div");
-    row.className = "listRow";
-    const in1 = document.createElement("input");
-    const in2 = document.createElement("input");
-    in1.value = a || "";
-    in2.value = b || "";
-    const del = document.createElement("button");
-    del.type = "button";
-    del.textContent = "Xoá";
-    del.addEventListener("click", () => onDel());
-    row.appendChild(in1);
-    row.appendChild(in2);
-    row.appendChild(del);
-    return { row, in1, in2 };
-  }
-  function makeRow1(a, onDel) {
-    const row = document.createElement("div");
-    row.className = "listRow";
-    row.style.gridTemplateColumns = "1fr auto";
-    const in1 = document.createElement("input");
-    in1.value = a || "";
-    const del = document.createElement("button");
-    del.type = "button";
-    del.textContent = "Xoá";
-    del.addEventListener("click", () => onDel());
-    row.appendChild(in1);
-    row.appendChild(del);
-    return { row, in1 };
-  }
-
-  let draftLists = null;
-  let draftSettings = null;
-
-  function openListsModal() {
-    // populate drafts
-    draftLists = structuredClone ? structuredClone(getLists()) : JSON.parse(JSON.stringify(getLists()));
-    draftSettings = structuredClone ? structuredClone(getSettings()) : JSON.parse(JSON.stringify(getSettings()));
-
-    // settings -> UI
-    stMode.value = draftSettings.storageMode;
-    stInterval.value = String(draftSettings.syncSeconds || 5);
-    stUrl.value = draftSettings.supabaseUrl || "";
-    stKey.value = draftSettings.supabaseAnonKey || "";
-
-    renderListsDraft();
-    openBackdrop(listsBackdrop);
-  }
-
-  function renderListsDraft() {
-    // staff
-    staffList.innerHTML = "";
-    draftLists.staff.forEach((s, idx) => {
-      const r = makeRow2(String(s.id || ""), String(s.name || ""), () => {
-        draftLists.staff.splice(idx, 1);
-        renderListsDraft();
-      });
-      r.in1.placeholder = "StaffID";
-      r.in2.placeholder = "Tên";
-      staffList.appendChild(r.row);
-      r.in1.addEventListener("input", () => draftLists.staff[idx].id = r.in1.value.trim());
-      r.in2.addEventListener("input", () => draftLists.staff[idx].name = r.in2.value.trim());
-    });
-
-    // statuses
-    statusList.innerHTML = "";
-    draftLists.statuses.forEach((x, idx) => {
-      const r = makeRow1(String(x || ""), () => {
-        draftLists.statuses.splice(idx, 1);
-        renderListsDraft();
-      });
-      statusList.appendChild(r.row);
-      r.in1.addEventListener("input", () => draftLists.statuses[idx] = r.in1.value.trim());
-    });
-
-    // groups
-    groupList.innerHTML = "";
-    draftLists.groups.forEach((x, idx) => {
-      const r = makeRow1(String(x || ""), () => {
-        draftLists.groups.splice(idx, 1);
-        renderListsDraft();
-      });
-      groupList.appendChild(r.row);
-      r.in1.addEventListener("input", () => draftLists.groups[idx] = r.in1.value.trim());
-    });
-
-    // priorities
-    priorityList.innerHTML = "";
-    draftLists.priorities.forEach((x, idx) => {
-      const r = makeRow1(String(x || ""), () => {
-        draftLists.priorities.splice(idx, 1);
-        renderListsDraft();
-      });
-      priorityList.appendChild(r.row);
-      r.in1.addEventListener("input", () => draftLists.priorities[idx] = r.in1.value.trim());
-    });
-
-    // kpis
-    kpiList.innerHTML = "";
-    draftLists.kpis.forEach((x, idx) => {
-      const r = makeRow1(String(x || ""), () => {
-        draftLists.kpis.splice(idx, 1);
-        renderListsDraft();
-      });
-      kpiList.appendChild(r.row);
-      r.in1.addEventListener("input", () => draftLists.kpis[idx] = r.in1.value.trim());
-    });
-
-    // metrics
-    metricList.innerHTML = "";
-    draftLists.outputMetrics.forEach((x, idx) => {
-      const r = makeRow1(String(x || ""), () => {
-        draftLists.outputMetrics.splice(idx, 1);
-        renderListsDraft();
-      });
-      metricList.appendChild(r.row);
-      r.in1.addEventListener("input", () => draftLists.outputMetrics[idx] = r.in1.value.trim());
-    });
-  }
-
-  function saveListsAndSettings() {
-    // sanitize
-    const cleanStaff = (draftLists.staff || []).map(s => ({
-      id: String(s.id || "").trim(),
-      name: String(s.name || "").trim(),
-    })).filter(s => s.id && s.name);
-
-    draftLists.staff = cleanStaff;
-    draftLists.groups = (draftLists.groups || []).map(x => String(x||"").trim()).filter(Boolean);
-    draftLists.statuses = (draftLists.statuses || []).map(x => String(x||"").trim()).filter(Boolean);
-    draftLists.priorities = (draftLists.priorities || []).map(x => String(x||"").trim()).filter(Boolean);
-    draftLists.kpis = (draftLists.kpis || []).map(x => String(x||"").trim()).filter(Boolean);
-    draftLists.outputMetrics = (draftLists.outputMetrics || []).map(x => String(x||"").trim()).filter(Boolean);
-
-    // settings from UI
-    draftSettings.storageMode = stMode.value;
-    draftSettings.syncSeconds = Math.max(2, Number(stInterval.value || 5));
-    draftSettings.supabaseUrl = stUrl.value.trim();
-    draftSettings.supabaseAnonKey = stKey.value.trim();
-
-    saveLists(draftLists);
-    saveSettings(draftSettings);
-
+    const S=getSettings();
+    const newS={
+      storageMode: stMode.value||S.storageMode,
+      supabaseUrl: stUrl.value||S.supabaseUrl,
+      supabaseAnonKey: stKey.value||S.supabaseAnonKey,
+      syncSeconds: Math.max(3, Number(stInterval.value||S.syncSeconds))
+    };
+    saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
-    closeAllModals();
-    setupSyncLoop(); // restart sync with new settings
-    renderTable();
-    markSynced(true);
+    setupTimer();
+    syncAll();
   }
 
-  // ---------- Sync loop (polling) ----------
-  let syncTimer = null;
+  // ---- Export (Tasks + Forecast with Excel template layout) ----
+  function buildTasksSheets(wb){
+    const vis=visibleTasks();
+    const sheet1=XLSX.utils.json_to_sheet(vis.map(t=>({
+      ID: t.seq?`#${t.seq}`:t.id,
+      WeekStart: t.weekStart,
+      Group: t.group,
+      Title: t.title,
+      Deadline: t.deadline,
+      Owner: t.ownerName||t.ownerId,
+      Status: t.status,
+      Priority: t.priority,
+      KPI: t.kpi,
+      Metric: t.metric,
+      Commit: t.commit,
+      Actual: t.actual,
+      CarryOver: t.carryOver,
+      AssignedBy: t.assignedByName||"",
+      Note: t.note||""
+    })));
+    XLSX.utils.book_append_sheet(wb, sheet1, "TASKS_WEEK");
 
-  function markSynced(ok) {
-    const s = getSettings();
-    const t = new Date();
-    state.lastSyncAt = t;
-    if (ok) {
-      setSyncUI({ ok:true, text:`${s.storageMode} • synced ${formatTime(t)}` });
-    } else {
-      setSyncUI({ ok:false, text:`${s.storageMode} • lỗi sync` });
+    const by=new Map();
+    for(const t of vis){
+      const k=t.ownerName||t.ownerId||"";
+      if(!by.has(k)) by.set(k, {Owner:k, Total:0, Done:0, Overdue:0});
+      const r=by.get(k); r.Total++; if(isDone(t.status)) r.Done++; if(isOverdue(t)) r.Overdue++;
     }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Array.from(by.values())), "SUMMARY_TASKS");
   }
 
-  async function syncOnce() {
-    const s = getSettings();
-    if (s.storageMode !== "supabase") return; // local doesn't need polling
-    if (state.syncing) return;
-    if (!s.supabaseUrl || !s.supabaseAnonKey) return;
+  function setCell(ws, addr, v){
+    ws[addr] = v;
+  }
 
-    state.syncing = true;
-    try {
-      const tasks = await sbFetchTasks();
-      // cheap compare by length + max updatedAt
-      const maxNew = tasks.reduce((m, t) => (t.updatedAt && t.updatedAt > m ? t.updatedAt : m), "");
-      const maxOld = state.tasks.reduce((m, t) => (t.updatedAt && t.updatedAt > m ? t.updatedAt : m), "");
-      if (tasks.length !== state.tasks.length || maxNew !== maxOld) {
-        state.tasks = tasks;
-        renderTable();
+  function exportForecastSheet(wb){
+    const L=getLists();
+    const staff=L.staff.filter(s=>String(s.id)!=="54000600");
+    const weekStart=state.week;
+    const weekEnd=weekEndISO(weekStart);
+
+    const d=parseISO(weekStart) || new Date();
+    const year=d.getFullYear();
+    const q=Math.floor(d.getMonth()/3)+1;
+    const qLabel=`KH QUÝ ${q}/${year}`;
+
+    // Build AOA for columns A..AB (28 columns)
+    const cols=28;
+    const rows=[];
+
+    // Row1
+    const r1=new Array(cols).fill("");
+    r1[0]="Tuần";
+    r1[2]=fmtDDMMYYYY(weekStart);
+    r1[3]="-";
+    r1[4]=fmtDDMMYYYY(weekEnd);
+    rows.push(r1);
+
+    // Row2 (group headers)
+    const r2=new Array(cols).fill("");
+    r2[0]="STT";
+    r2[1]="TÊN ĐƠN VỊ";
+    r2[2]="HDV CUỐI KỲ";
+    r2[7]="DƯ NỢ CUỐI KỲ ";
+    r2[12]="TK HKD";
+    r2[16]="Thẻ TD";
+    r2[20]="Hoa hồng bảo hiểm";
+    r2[24]="SMARTBANKING";
+    rows.push(r2);
+
+    // Row3 (sub headers)
+    const r3=new Array(cols).fill("");
+    // HDV (C-G)
+    r3[2]="Đã Thực hiện";
+    r3[3]="KH Tuần";
+    r3[4]="Tăng/giảm so đầu tuần";
+    r3[5]=qLabel;
+    r3[6]="GAP QUÝ";
+    // DU_NO (H-L)
+    r3[7]="Đã Thực hiện";
+    r3[8]="KH Tuần";
+    r3[9]="Tăng/giảm so đầu tuần";
+    r3[10]=qLabel;
+    r3[11]="GAP QUÝ";
+    // TK HKD (M-P)
+    r3[12]="Đã Thực hiện"; r3[13]="KH Tuần"; r3[14]="KH Quý"; r3[15]="GAP";
+    // The TD (Q-T)
+    r3[16]="Đã Thực hiện"; r3[17]="KH Tuần"; r3[18]="KH Quý"; r3[19]="GAP";
+    // Insurance (U-X)
+    r3[20]="Đã Thực hiện"; r3[21]="KH Tuần"; r3[22]="KH Quý"; r3[23]="GAP";
+    // Smart (Y-AB)
+    r3[24]="Đã Thực hiện"; r3[25]="KH Tuần"; r3[26]="KH Quý"; r3[27]="GAP";
+    rows.push(r3);
+
+    // Row4 (units)
+    const r4=new Array(cols).fill("");
+    r4[1]="Đơn vị tính";
+    r4[4]="Tỷ đồng"; r4[5]="Tỷ đồng"; // match sample placement
+    r4[9]="Tỷ đồng"; r4[11]="Tỷ đồng";
+    r4[13]="TK"; r4[14]="TK";
+    r4[17]="Thẻ";
+    r4[21]="Tỷ đồng"; r4[23]="Tỷ đồng";
+    r4[26]="Tỷ đồng";
+    rows.push(r4);
+
+    // Row5 total
+    const r5=new Array(cols).fill("");
+    r5[0]=7;
+    r5[1]=CFG.forecastUnitName || "TỔNG";
+    rows.push(r5);
+
+    // Staff rows
+    for(let i=0;i<staff.length;i++){
+      const s=staff[i];
+      const rr=new Array(cols).fill("");
+      rr[1]=`${s.id} - ${s.name}`;
+      rows.push(rr);
+    }
+
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+
+    // Merges (match sample)
+    ws["!merges"] = [
+      {s:{r:0,c:0}, e:{r:0,c:1}}, // A1:B1
+      {s:{r:1,c:2}, e:{r:1,c:6}}, // C2:G2
+      {s:{r:1,c:7}, e:{r:1,c:11}},// H2:L2
+      {s:{r:1,c:12},e:{r:1,c:15}},// M2:P2
+      {s:{r:1,c:16},e:{r:1,c:19}},// Q2:T2
+      {s:{r:1,c:20},e:{r:1,c:23}},// U2:X2
+      {s:{r:1,c:24},e:{r:1,c:27}},// Y2:AB2
+    ];
+
+    // Column widths (approx like template)
+    ws["!cols"] = [
+      {wch:5}, {wch:34},
+      {wch:14},{wch:12},{wch:18},{wch:14},{wch:12},
+      {wch:14},{wch:12},{wch:18},{wch:14},{wch:12},
+      {wch:12},{wch:12},{wch:12},{wch:12},
+      {wch:12},{wch:12},{wch:12},{wch:12},
+      {wch:14},{wch:12},{wch:12},{wch:12},
+      {wch:14},{wch:12},{wch:12},{wch:12},
+    ];
+
+    // Helper to addr
+    function addr(r,c){ return XLSX.utils.encode_cell({r:r,c:c}); }
+
+    const staffStartRow = 5; // 0-based row index for Excel row6
+    const n = staff.length;
+    const last = staffStartRow + n - 1;
+
+    // Write staff values + formulas
+    const metricCols = {
+      HDV: {a:2,w:3,delta:4,q:5,gap:6, kind:"5col", key:"HDV_CUOI_KY"},
+      DN:  {a:7,w:8,delta:9,q:10,gap:11, kind:"5col", key:"DU_NO_CUOI_KY"},
+      HKD: {a:12,w:13,q:14,gap:15, kind:"4col", key:"TK_HKD"},
+      THE: {a:16,w:17,q:18,gap:19, kind:"4col", key:"THE_TD"},
+      BH:  {a:20,w:21,q:22,gap:23, kind:"4col", key:"HH_BAO_HIEM"},
+      SB:  {a:24,w:25,q:26,gap:27, kind:"4col", key:"SMARTBANKING"},
+    };
+
+    for(let i=0;i<n;i++){
+      const excelRow = staffStartRow + i; // 0-based
+      const s=staff[i];
+      // for each metric
+      for(const k of Object.keys(metricCols)){
+        const m=metricCols[k];
+        const row=getFcRow(weekStart, s.id, m.key);
+        const a=numOrNull(row.actual);
+        const w=numOrNull(row.weekPlan);
+        const qv=numOrNull(row.quarterPlan);
+
+        if(a!==null) ws[addr(excelRow,m.a)] = {t:"n", v:a};
+        if(w!==null) ws[addr(excelRow,m.w)] = {t:"n", v:w};
+        if(qv!==null) ws[addr(excelRow,m.q)] = {t:"n", v:qv};
+
+        if(m.kind==="5col"){
+          ws[addr(excelRow,m.delta)] = {t:"n", f:`${XLSX.utils.encode_col(m.w)}${excelRow+1}-${XLSX.utils.encode_col(m.a)}${excelRow+1}`};
+          ws[addr(excelRow,m.gap)]   = {t:"n", f:`${XLSX.utils.encode_col(m.a)}${excelRow+1}-${XLSX.utils.encode_col(m.q)}${excelRow+1}`};
+        }else{
+          ws[addr(excelRow,m.gap)]   = {t:"n", f:`${XLSX.utils.encode_col(m.a)}${excelRow+1}-${XLSX.utils.encode_col(m.q)}${excelRow+1}`};
+        }
       }
-      markSynced(true);
-    } catch (e) {
-      console.error(e);
-      markSynced(false);
-    } finally {
-      state.syncing = false;
     }
+
+    // Total row formulas (Excel row5 => 0-based row4)
+    const totalRow = 4;
+    function sumRange(col, r1, r2){
+      const c=XLSX.utils.encode_col(col);
+      return `SUM(${c}${r1+1}:${c}${r2+1})`;
+    }
+
+    // HDV
+    ws[addr(totalRow,2)] = {t:"n", f: sumRange(2, staffStartRow, last)}; // C
+    ws[addr(totalRow,3)] = {t:"n", f: sumRange(3, staffStartRow, last)}; // D
+    ws[addr(totalRow,4)] = {t:"n", f: `D${totalRow+1}-C${totalRow+1}`}; // E
+    ws[addr(totalRow,5)] = {t:"n", f: sumRange(5, staffStartRow, last)}; // F
+    ws[addr(totalRow,6)] = {t:"n", f: `C${totalRow+1}-F${totalRow+1}`}; // G
+
+    // DU_NO
+    ws[addr(totalRow,7)]  = {t:"n", f: sumRange(7, staffStartRow, last)};  // H
+    ws[addr(totalRow,8)]  = {t:"n", f: sumRange(8, staffStartRow, last)};  // I
+    ws[addr(totalRow,9)]  = {t:"n", f: `I${totalRow+1}-H${totalRow+1}`};   // J
+    ws[addr(totalRow,10)] = {t:"n", f: sumRange(10, staffStartRow, last)}; // K
+    ws[addr(totalRow,11)] = {t:"n", f: `H${totalRow+1}-K${totalRow+1}`};   // L
+
+    // HKD
+    ws[addr(totalRow,12)] = {t:"n", f: sumRange(12, staffStartRow, last)}; // M
+    ws[addr(totalRow,13)] = {t:"n", f: sumRange(13, staffStartRow, last)}; // N
+    ws[addr(totalRow,14)] = {t:"n", f: sumRange(14, staffStartRow, last)}; // O
+    ws[addr(totalRow,15)] = {t:"n", f: `M${totalRow+1}-O${totalRow+1}`};   // P
+
+    // THE
+    ws[addr(totalRow,16)] = {t:"n", f: sumRange(16, staffStartRow, last)}; // Q
+    ws[addr(totalRow,17)] = {t:"n", f: sumRange(17, staffStartRow, last)}; // R
+    ws[addr(totalRow,18)] = {t:"n", f: sumRange(18, staffStartRow, last)}; // S
+    ws[addr(totalRow,19)] = {t:"n", f: `Q${totalRow+1}-S${totalRow+1}`};   // T
+
+    // BH
+    ws[addr(totalRow,20)] = {t:"n", f: sumRange(20, staffStartRow, last)}; // U
+    ws[addr(totalRow,21)] = {t:"n", f: sumRange(21, staffStartRow, last)}; // V
+    ws[addr(totalRow,22)] = {t:"n", f: sumRange(22, staffStartRow, last)}; // W
+    ws[addr(totalRow,23)] = {t:"n", f: `U${totalRow+1}-W${totalRow+1}`};   // X
+
+    // SB
+    ws[addr(totalRow,24)] = {t:"n", f: sumRange(24, staffStartRow, last)}; // Y
+    ws[addr(totalRow,25)] = {t:"n", f: sumRange(25, staffStartRow, last)}; // Z
+    ws[addr(totalRow,26)] = {t:"n", f: sumRange(26, staffStartRow, last)}; // AA
+    ws[addr(totalRow,27)] = {t:"n", f: `Y${totalRow+1}-AA${totalRow+1}`};  // AB
+
+    XLSX.utils.book_append_sheet(wb, ws, "Theo doi tien do");
   }
 
-  function setupSyncLoop() {
-    if (syncTimer) {
-      clearInterval(syncTimer);
-      syncTimer = null;
-    }
-
-    const s = getSettings();
-    // UI tag
-    setSyncUI({ ok:true, text:`${s.storageMode} • ready` });
-
-    if (s.storageMode !== "supabase") return;
-
-    // run once immediately
-    syncOnce();
-
-    const sec = Math.max(2, Number(s.syncSeconds || 5));
-    syncTimer = setInterval(() => {
-      // pause when tab hidden (saves battery)
-      if (document.hidden) return;
-      syncOnce();
-    }, sec * 1000);
+  function exportWeekly(){
+    const wb=XLSX.utils.book_new();
+    buildTasksSheets(wb);
+    exportForecastSheet(wb);
+    XLSX.writeFile(wb, `KehoachTuan_${state.week}.xlsx`);
   }
 
-  // ---------- Table actions ----------
-  function onTableClick(e) {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    const act = btn.getAttribute("data-act");
-    const id = btn.getAttribute("data-id");
-    const t = state.tasks.find(x => String(x.id) === String(id));
-    if (!t) return;
-
-    if (act === "edit") {
-      openTaskModal("edit", t);
-      return;
-    }
-    if (act === "del") {
-      deleteTask(id);
-      return;
-    }
+  // ---- View switch ----
+  function setView(name){
+    state.view=name;
+    tabTasks.classList.toggle("active", name==="tasks");
+    tabForecast.classList.toggle("active", name==="forecast");
+    viewTasks.style.display = name==="tasks" ? "" : "none";
+    viewForecast.style.display = name==="forecast" ? "" : "none";
+    render();
   }
 
-  // ---------- Load initial tasks ----------
-  async function loadInitialTasks() {
-    const s = getSettings();
-    if (s.storageMode === "supabase" && s.supabaseUrl && s.supabaseAnonKey) {
-      try {
-        state.tasks = await sbFetchTasks();
-        markSynced(true);
-      } catch (e) {
+  function render(){
+    refreshDropdowns();
+    if(state.view==="tasks") renderTasks();
+    else renderForecastCards();
+  }
+
+  // ---- Event wiring ----
+  function wire(){
+    tabTasks.onclick=()=>setView("tasks");
+    tabForecast.onclick=()=>setView("forecast");
+
+    elWeek.onchange=()=>{
+      state.week = pickWeekStartISO(elWeek.value);
+      elWeek.value = state.week;
+      syncAll();
+    };
+
+    elMe.onchange=()=>{
+      state.meId = elMe.value;
+      // default forecast filter to self for non-managers
+      if(!isManager(state.meId)) state.fcStaff = state.meId;
+      render();
+    };
+
+    filterAssignee.onchange=()=>{ state.filterAssignee=filterAssignee.value; renderTasks(); };
+    filterStatus.onchange=()=>{ state.filterStatus=filterStatus.value; renderTasks(); };
+    filterGroup.onchange=()=>{ state.filterGroup=filterGroup.value; renderTasks(); };
+    filterOverdue.onchange=()=>{ state.onlyOverdue=!!filterOverdue.checked; renderTasks(); };
+    btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; filterOverdue.checked=false; render(); };
+
+    btnAdd.onclick=()=>openTask(null);
+    btnExport.onclick=()=>exportWeekly();
+    btnLists.onclick=()=>openLists();
+
+    taskClose.onclick=closeModals;
+    btnCancel.onclick=closeModals;
+    taskBackdrop.onclick=(e)=>{ if(e.target===taskBackdrop) closeModals(); };
+
+    listsClose.onclick=closeModals;
+    btnListsCancel.onclick=closeModals;
+    listsBackdrop.onclick=(e)=>{ if(e.target===listsBackdrop) closeModals(); };
+
+    document.addEventListener("keydown",(e)=>{ if(e.key==="Escape") closeModals(); });
+
+    taskForm.addEventListener("submit", saveTask);
+
+    tbody.addEventListener("click",(e)=>{
+      const btn=e.target.closest("button"); if(!btn) return;
+      const act=btn.dataset.act, id=btn.dataset.id;
+      if(act==="edit"){ const t=state.tasks.find(x=>x.id===id); if(t) openTask(t); }
+      if(act==="del"){ if(confirm("Xoá công việc này?")) delTask(id); }
+    });
+
+    $$(".tabs [data-listtab]").forEach(btn=>btn.addEventListener("click",()=>setListTab(btn.dataset.listtab)));
+    btnAddStaff.onclick=()=>staffList.appendChild(mkRow2("",""));
+    btnAddStatus.onclick=()=>statusList.appendChild(mkRow1(""));
+    btnAddGroup.onclick=()=>groupList.appendChild(mkRow1(""));
+    btnAddPriority.onclick=()=>priorityList.appendChild(mkRow1(""));
+    btnAddKpi.onclick=()=>kpiList.appendChild(mkRow1(""));
+    btnAddMetric.onclick=()=>metricList.appendChild(mkRow1(""));
+    btnListsSave.onclick=()=>{ saveLists(); closeModals(); };
+
+    // Forecast
+    fcStaffFilter.onchange=()=>{ state.fcStaff = fcStaffFilter.value; renderForecastCards(); };
+    btnFcToggle.onclick=()=>{
+      if(!isManager(state.meId)) return alert("Chỉ quản lý mới bật sửa Thực hiện/KH Quý.");
+      state.fcEditAdmin = !state.fcEditAdmin;
+      btnFcToggle.textContent = state.fcEditAdmin ? "Tắt sửa Thực hiện/KH Quý" : "Bật sửa Thực hiện/KH Quý";
+      renderForecastCards();
+    };
+    btnFcImport.onclick=()=>{
+      if(!isManager(state.meId)) return alert("Chỉ quản lý mới import số liệu.");
+      fcImportFile.value=""; fcImportFile.click();
+    };
+    fcImportFile.onchange=async()=>{
+      const f=fcImportFile.files && fcImportFile.files[0];
+      if(!f) return;
+      try{
+        const n=await importForecastExcel(f);
+        alert("Import xong ("+n+" ô).");
+        await syncAll();
+      }catch(e){
         console.error(e);
-        // fallback to local so app still usable
-        state.tasks = loadTasksLocal();
-        markSynced(false);
-        alert("Không tải được dữ liệu Supabase. Tạm dùng local. Kiểm tra URL/anon key hoặc RLS.");
+        alert("Import lỗi. Hãy dùng file đúng cấu trúc như mẫu.");
       }
-    } else {
-      state.tasks = loadTasksLocal();
-      markSynced(true);
-    }
-  }
+    };
 
-  // ---------- Wire events ----------
-  function wireEvents() {
-    elWeek.addEventListener("change", () => {
-      state.weekStartISO = pickWeekStartISO(elWeek.value);
-      elWeek.value = state.weekStartISO;
-      renderTable();
-    });
+    // Forecast input handler (event delegation)
+    fcCards.addEventListener("input",(e)=>{
+      const el=e.target;
+      if(!(el instanceof HTMLInputElement)) return;
+      if(el.dataset.fc!=="1") return;
+      const staffId=el.dataset.staff;
+      const metricKey=el.dataset.metric;
+      const field=el.dataset.field;
 
-    elMe.addEventListener("change", () => {
-      state.meId = elMe.value || "";
-    });
+      const row=getFcRow(state.week, staffId, metricKey);
+      if(field==="actual") row.actual = numOrNull(el.value);
+      if(field==="weekPlan") row.weekPlan = numOrNull(el.value);
+      if(field==="quarterPlan") row.quarterPlan = numOrNull(el.value);
+      setFcRow(row);
 
-    elBtnAdd.addEventListener("click", () => {
-      if (!state.meId) {
-        alert("Bạn cần chọn “Tôi là” trước khi thêm việc.");
-        return;
-      }
-      openTaskModal("add");
-    });
-
-    elBtnExport.addEventListener("click", exportWeekly);
-
-    elBtnLists.addEventListener("click", () => {
-      openListsModal();
-    });
-
-    elTblBody.addEventListener("click", onTableClick);
-
-    // filters
-    elFilterAssignee.addEventListener("change", () => {
-      state.filterAssignee = elFilterAssignee.value || "";
-      renderTable();
-    });
-    elFilterStatus.addEventListener("change", () => {
-      state.filterStatus = elFilterStatus.value || "";
-      renderTable();
-    });
-    elFilterGroup.addEventListener("change", () => {
-      state.filterGroup = elFilterGroup.value || "";
-      renderTable();
-    });
-    elFilterOverdue.addEventListener("change", () => {
-      state.onlyOverdue = !!elFilterOverdue.checked;
-      renderTable();
-    });
-    elBtnClearFilter.addEventListener("click", () => {
-      state.filterAssignee = "";
-      state.filterStatus = "";
-      state.filterGroup = "";
-      state.onlyOverdue = false;
-      elFilterAssignee.value = "";
-      elFilterStatus.value = "";
-      elFilterGroup.value = "";
-      elFilterOverdue.checked = false;
-      renderTable();
-    });
-
-    // task modal close
-    taskClose.addEventListener("click", closeAllModals);
-    btnCancel.addEventListener("click", closeAllModals);
-    taskBackdrop.addEventListener("click", (ev) => {
-      if (ev.target === taskBackdrop) closeAllModals();
-    });
-    taskForm.addEventListener("submit", (ev) => {
-      ev.preventDefault();
-      upsertTask();
-    });
-
-    // lists modal close
-    listsClose.addEventListener("click", closeAllModals);
-    btnListsCancel.addEventListener("click", closeAllModals);
-    listsBackdrop.addEventListener("click", (ev) => {
-      if (ev.target === listsBackdrop) closeAllModals();
-    });
-    btnListsSave.addEventListener("click", saveListsAndSettings);
-
-    // lists add buttons
-    btnAddStaff.addEventListener("click", () => {
-      draftLists.staff.push({ id:"", name:"" });
-      renderListsDraft();
-    });
-    btnAddStatus.addEventListener("click", () => {
-      draftLists.statuses.push("");
-      renderListsDraft();
-    });
-    btnAddGroup.addEventListener("click", () => {
-      draftLists.groups.push("");
-      renderListsDraft();
-    });
-    btnAddPriority.addEventListener("click", () => {
-      draftLists.priorities.push("");
-      renderListsDraft();
-    });
-    btnAddKpi.addEventListener("click", () => {
-      draftLists.kpis.push("");
-      renderListsDraft();
-    });
-    btnAddMetric.addEventListener("click", () => {
-      draftLists.outputMetrics.push("");
-      renderListsDraft();
-    });
-
-    // tabs
-    $$(".tabBtn").forEach((b) => {
-      b.addEventListener("click", () => {
-        $$(".tabBtn").forEach(x => x.classList.remove("active"));
-        b.classList.add("active");
-        const tab = b.getAttribute("data-tab");
-        $("#staffTab").style.display = (tab === "staffTab") ? "" : "none";
-        $("#listsTab").style.display = (tab === "listsTab") ? "" : "none";
-        $("#storeTab").style.display = (tab === "storeTab") ? "" : "none";
-      });
-    });
-
-    // keyboard
-    document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") closeAllModals();
-    });
-
-    // if settings changed in another tab
-    window.addEventListener("storage", (ev) => {
-      if (ev.key === KEY_SETTINGS || ev.key === KEY_LISTS) {
-        refreshDropdowns();
-        setupSyncLoop();
-      }
+      scheduleSaveFc(staffId, metricKey);
+      // live recompute
+      renderForecastCards();
     });
   }
 
-  // ---------- Bootstrap ----------
-  async function bootstrap() {
-    console.log("Kehoachtuan", VERSION);
-
-    // init week
-    elWeek.value = state.weekStartISO;
-
+  // ---- Init ----
+  function init(){
+    elWeek.value = state.week;
     refreshDropdowns();
-
-    // restore settings UI tag
-    const s = getSettings();
-    setSyncUI({ ok:true, text:`${s.storageMode} • ready` });
-
-    await loadInitialTasks();
-    renderTable();
-
-    setupSyncLoop();
-    wireEvents();
+    setupTimer();
+    wire();
+    syncAll();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bootstrap);
-  } else {
-    bootstrap();
-  }
+  init();
 })();
