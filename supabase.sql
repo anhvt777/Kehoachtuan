@@ -1,14 +1,17 @@
--- Kehoachtuan Supabase schema v6.1.0
--- Run in Supabase SQL Editor. Safe to re-run.
+-- Kehoachtuan - Supabase schema (tasks)
+-- Run this in Supabase SQL Editor.
+-- Notes:
+-- 1) For quick testing: you may disable RLS on table tasks.
+-- 2) After stable: enable RLS + policies.
 
-create extension if not exists "uuid-ossp";
+create extension if not exists "pgcrypto";
 
 create table if not exists public.tasks (
-  id text primary key,
+  id uuid primary key,
   seq bigint,
   week_start date not null,
   group_name text,
-  title text,
+  title text not null,
   deadline date,
   status text,
   priority text,
@@ -26,23 +29,23 @@ create table if not exists public.tasks (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists tasks_week_start_idx on public.tasks(week_start);
-create index if not exists tasks_updated_idx on public.tasks(updated_at);
+create index if not exists tasks_week_start_idx on public.tasks (week_start);
+create index if not exists tasks_owner_id_idx on public.tasks (owner_id);
 
-create table if not exists public.weekly_forecast (
-  id uuid primary key default uuid_generate_v4(),
-  week_start date not null,
-  staff_id text not null,
-  metric_key text not null,
-  actual numeric,
-  quarter_plan numeric,
-  week_plan numeric,
-  note text,
-  updated_by_id text,
-  updated_by_name text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
 
-create unique index if not exists weekly_forecast_uniq on public.weekly_forecast(week_start, staff_id, metric_key);
-create index if not exists weekly_forecast_week_idx on public.weekly_forecast(week_start);
+drop trigger if exists trg_set_updated_at on public.tasks;
+create trigger trg_set_updated_at
+before update on public.tasks
+for each row execute function public.set_updated_at();
+
+-- RLS (optional)
+-- alter table public.tasks enable row level security;
+-- Example policy (allow all for anon) - NOT recommended for production:
+-- create policy "anon_all" on public.tasks for all using (true) with check (true);
