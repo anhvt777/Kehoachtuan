@@ -278,15 +278,15 @@
       ].filter(Boolean).join(" • ");
       const idLabel=t.seq?`#${t.seq}`:(t.id||"").slice(0,8);
       return `<tr class="${isOverdue(t)?"row-overdue":""}">
-        <td class="fcNum">${escapeHtml(idLabel)}</td>
-        <td>${escapeHtml(t.group||"")}</td>
-        <td><div style="font-weight:800">${escapeHtml(t.title||"")}</div>
+        <td class="fcNum" data-label="ID">${escapeHtml(idLabel)}</td>
+        <td data-label="Nhóm công việc">${escapeHtml(t.group||"")}</td>
+        <td data-label="Công việc / Hoạt động"><div style="font-weight:800">${escapeHtml(t.title||"")}</div>
             <div style="margin-top:6px;color:#5b6b67;font-size:12px">${escapeHtml(meta)}</div></td>
-        <td class="fcNum">${escapeHtml(fmtDDMMYYYY(t.deadline))}</td>
-        <td>${escapeHtml(t.ownerName||t.ownerId||"")}</td>
-        <td>${escapeHtml(t.status||"")}</td>
-        <td>${escapeHtml(t.note||"")}</td>
-        <td>
+        <td class="fcNum" data-label="Deadline">${escapeHtml(fmtDDMMYYYY(t.deadline))}</td>
+        <td data-label="CB đầu mối">${escapeHtml(t.ownerName||t.ownerId||"")}</td>
+        <td data-label="Trạng thái">${escapeHtml(t.status||"")}</td>
+        <td data-label="Kết quả / Ghi chú">${escapeHtml(t.note||"")}</td>
+        <td data-label="Tác vụ">
           <button class="btn-mini" data-act="edit" data-id="${escapeHtml(t.id)}">Sửa</button>
           <button class="btn-mini danger" data-act="del" data-id="${escapeHtml(t.id)}">Xoá</button>
         </td>
