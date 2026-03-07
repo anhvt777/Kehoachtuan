@@ -1,11 +1,19 @@
-# Kehoachtuan (v5.0.0)
+# Kehoachtuan v6.1.0 (BIDV)
+## What's new
+- Tab **Dự kiến số liệu** dạng **Card** (mobile-friendly)
+- Export Excel: sheet **Theo doi tien do** bám theo file mẫu Du kien tuan.xlsx (header + merge + công thức)
 
-## Chạy local
-- Storage mode = local (mỗi thiết bị 1 dữ liệu)
+## Deploy
+Upload/Replace these files in repo root:
+- index.html
+- styles.css
+- config.js
+- app.js
+- supabase.sql (optional, only needed when setting up Supabase)
 
-## Chạy realtime với Supabase
-1) Supabase → SQL Editor → chạy `supabase.sql`
-2) Test nhanh: Table editor → tasks → RLS: Disable (tạm thời)
-3) Trên web (mỗi thiết bị): Danh mục → Lưu trữ → Storage mode = supabase → dán URL + anon key → Lưu danh mục
+Then open:
+https://<username>.github.io/<repo>/?v=6.1.0
 
-Gợi ý: nếu cache cũ, mở link có `?v=5.0.0` hoặc Ctrl+F5.
+## Realtime
+Danh mục → Lưu trữ → chọn `supabase` + nhập Project URL + Publishable/anon key.
+Khuyến nghị chu kỳ 5–10 giây.
