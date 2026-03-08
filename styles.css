@@ -756,3 +756,40 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
   .fcMetricHead{ padding:10px 10px; }
   .fcChip{ padding:6px 8px; }
 }
+
+
+
+/* =========================
+   Forecast iPhone UX (Modal entry)
+   v6.3.1
+   - Staff card shows compact KPI rows
+   - Tap KPI row opens modal for editing
+   ========================= */
+.fcRowList{ display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+.fcRow{ 
+  display:flex; justify-content:space-between; gap:12px; align-items:center;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+}
+.fcRowLeft{ min-width:0; }
+.fcRowName{ font-weight:900; color:#123630; line-height:1.15; }
+.fcRowUnit{ font-size:11px; color:var(--muted); margin-top:2px; }
+.fcRowRight{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+.chip{ 
+  padding:6px 10px; border-radius:999px;
+  border:1px solid var(--line); background:#fff;
+  font-size:12px; font-weight:900;
+}
+.chip.primary{ border-color: rgba(0,107,91,.25); background: rgba(0,107,91,.08); color: var(--emerald); }
+.chip.neg{ border-color: rgba(198,40,40,.25); background:#FDECEC; color: var(--danger); }
+.chip.pos{ border-color: rgba(27,127,90,.25); background:#ECF8F2; color: var(--ok); }
+.fcTap{ cursor:pointer; }
+.fcTap:active{ transform: translateY(1px); }
+
+.chipRow{ display:flex; gap:8px; flex-wrap:wrap; }
+@media (max-width: 720px){
+  .fcRow{ padding:10px 10px; }
+  .chip{ padding:6px 8px; }
+}

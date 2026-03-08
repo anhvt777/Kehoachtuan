@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.3.0">
+  <link rel="stylesheet" href="styles.css?v=6.3.1">
 </head>
 <body>
   <div class="container">
@@ -12,7 +12,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.3.0)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.3.1)</span></div>
       </div>
 
       <div class="hright">
@@ -198,11 +198,60 @@
   </div>
 
   <!-- hidden inputs -->
+
+  <!-- Forecast KPI modal -->
+  <div class="backdrop" id="fcBackdrop">
+    <div class="modal">
+      <div class="mhead">
+        <h2 id="fcTitle">Nhập số liệu</h2>
+        <button class="iconBtn" id="fcClose" aria-label="Đóng">×</button>
+      </div>
+      <div class="mbody">
+        <form id="fcForm">
+          <input type="hidden" id="fcStaffId"/>
+          <input type="hidden" id="fcMetricKey"/>
+          <div class="note" style="margin:0 0 12px 0">
+            <div><b id="fcStaffName">Cán bộ</b></div>
+            <div style="margin-top:4px;color:var(--muted)">Tuần: <b id="fcWeek"></b></div>
+          </div>
+
+          <div class="formGrid">
+            <div class="field">
+              <label>Đã thực hiện (QL)</label>
+              <input id="fcActual" type="text" inputmode="decimal" placeholder="VD: 12,5"/>
+            </div>
+            <div class="field">
+              <label>KH Tuần (CB nhập)</label>
+              <input id="fcWeekPlan" type="text" inputmode="decimal" placeholder="VD: 15"/>
+            </div>
+            <div class="field">
+              <label>KH Quý (QL)</label>
+              <input id="fcQuarterPlan" type="text" inputmode="decimal" placeholder="VD: 50"/>
+            </div>
+            <div class="field">
+              <label>Kết quả</label>
+              <div class="chipRow">
+                <span class="chip" id="fcDeltaChip">Δ: -</span>
+                <span class="chip" id="fcGapChip">GAP: -</span>
+              </div>
+              <div class="smallHelp" id="fcHint" style="margin-top:8px">CB chỉ cần nhập <b>KH Tuần</b>. QL nhập/Import <b>Đã TH</b> &amp; <b>KH Quý</b>.</div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="mfoot">
+        <button class="btn ghost" id="fcCancel" type="button">Đóng</button>
+        <button class="btn primary" id="fcSave" type="submit" form="fcForm">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+
   <input id="fcImportFile" type="file" accept=".xlsx,.xls" style="display:none"/>
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js?v=6.3.0"></script>
-  <script src="app.js?v=6.3.0"></script>
+  <script src="config.js?v=6.3.1"></script>
+  <script src="app.js?v=6.3.1"></script>
 </body>
 </html>
