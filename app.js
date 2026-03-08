@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.1.0 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.1.6 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -170,11 +170,13 @@
   function closeModals(){
     taskBackdrop.classList.remove("open");
     listsBackdrop.classList.remove("open");
+    document.body.classList.remove("modal-open");
     document.body.style.overflow="";
   }
   function openModal(el){
     closeModals();
     el.classList.add("open");
+    document.body.classList.add("modal-open");
     document.body.style.overflow="hidden";
   }
 
@@ -814,6 +816,7 @@
     };
     saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
+    setupAutoCompactTopbar();
     setupTimer();
     syncAll();
   }
@@ -1176,6 +1179,24 @@
   }
 
   // ---- Init ----
+
+  // ---- Auto compact sticky topbar on scroll (mobile) ----
+  function setupAutoCompactTopbar(){
+    const topbar = document.querySelector(".topbar");
+    if(!topbar) return;
+    const mq = window.matchMedia("(max-width: 720px)");
+    const apply = () => {
+      if(!mq.matches){ topbar.classList.remove("compact"); return; }
+      // If a modal is open, keep topbar hidden via CSS; no need to toggle compact.
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      if(y > 60) topbar.classList.add("compact");
+      else topbar.classList.remove("compact");
+    };
+    window.addEventListener("scroll", apply, {passive:true});
+    window.addEventListener("resize", apply);
+    apply();
+  }
+
   function init(){
     elWeek.value = state.week;
     refreshDropdowns();

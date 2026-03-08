@@ -1,17 +1,16 @@
-Kehoachtuan Styles Fix Patch v6.1.4
+Kehoachtuan Mobile UX Patch v6.1.6
 
-Problem:
-- styles.css in v6.1.3 was missing the BIDV base theme (:root variables, layout, modal/table styles),
-  so the page looked like raw HTML even though styles.css loaded 200 OK.
+Replace in repo root:
+- index.html
+- styles.css
+- app.js
 
-Fix:
-- Replace BOTH files in repo root:
-  1) index.html
-  2) styles.css
+Open:
+https://anhvt777.github.io/Kehoachtuan/?v=6.1.6
 
-Then open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.1.4
-(or Ctrl+F5 / Incognito)
-
-Notes:
-- app.js/config.js can stay as-is.
+Fixes:
+1) Sticky bar no longer covers Add Task / Danh muc:
+   - When any modal opens, body gets class 'modal-open' and CSS hides .topbar.
+2) Auto-compact sticky bar while scrolling:
+   - On mobile (<=720px), when scrollY > 60, .topbar becomes 'compact' and hides title + selectors + sync row.
+   - Keeps only action buttons + tabs to maximize content area.

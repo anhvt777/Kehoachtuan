@@ -625,3 +625,42 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
   .topbar .tabsTop{ margin: 8px 0 0 0; }
   .topbar .tabsTop .tabBtn{ width: auto; }
 }
+
+
+/* =========================
+   Mobile UX Upgrade
+   v6.1.6
+   1) When a modal is open, hide sticky topbar so it never covers inputs.
+   2) Auto-compact topbar while scrolling (keep action buttons + tabs).
+   ========================= */
+
+.modal-open .topbar {
+  display: none !important;
+}
+
+@media (max-width: 720px){
+  .topbar{
+    transition: padding .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+  /* Compact: hide title/sub + the 2 selectors + sync row */
+  .topbar.compact .hleft,
+  .topbar.compact .pill,
+  .topbar.compact .syncBox {
+    display: none !important;
+  }
+  .topbar.compact {
+    padding-top: calc(env(safe-area-inset-top) + 8px);
+    padding-bottom: 8px;
+  }
+  /* In compact mode, keep the 3 buttons on one/two lines */
+  .topbar.compact .hright {
+    gap: 8px;
+  }
+  .topbar.compact .btn {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+  .topbar.compact .tabsTop {
+    margin-top: 8px;
+  }
+}
