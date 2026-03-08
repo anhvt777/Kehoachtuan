@@ -1,10 +1,10 @@
-/* Kehoachtuan v6.4.1 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.4.2 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
 (() => {
   "use strict";
-  console.info("Kehoachtuan loaded v6.4.1");
+  console.info("Kehoachtuan loaded v6.4.2");
   // Safety: avoid hard crash if renderReports is missing due to partial deploy/cache
   if(typeof renderReports !== "function"){ window.renderReports = function(){ /* noop */ }; }
 
@@ -365,6 +365,7 @@
     taskBackdrop.classList.remove("open");
     listsBackdrop.classList.remove("open");
     if(typeof fcBackdrop!=="undefined" && fcBackdrop) fcBackdrop.classList.remove("open");
+    if(typeof repBackdrop!=="undefined" && repBackdrop) repBackdrop.classList.remove("open");
     document.body.classList.remove("modal-open");
     document.body.style.overflow="";
   }
@@ -1103,6 +1104,14 @@ async function syncAll(){
 
   // Prefill assignee when manager assigns from Forecast
   state.prefillOwnerId = "";
+
+  function openMainAdd(){
+    if(state.view==="reports"){
+      if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
+      return openReport(null);
+    }
+    return safeOpenTask(null);
+  }
 function safeOpenTask(task){
     try{
       openTask(task);
@@ -1784,6 +1793,12 @@ const newLists={
 // ---- View switch ----
   function setView(name){
     state.view=name;
+
+    // Main add button context
+    if(btnAdd){
+      if(name==="reports"){ btnAdd.textContent="+ Thêm báo cáo"; }
+      else { btnAdd.textContent="+ Thêm việc"; }
+    }
     tabTasks.classList.toggle("active", name==="tasks");
     tabForecast.classList.toggle("active", name==="forecast");
     if(tabReports) tabReports.classList.toggle("active", name==="reports");
@@ -1828,14 +1843,14 @@ const newLists={
     filterOverdue.onchange=()=>{ state.onlyOverdue=!!filterOverdue.checked; renderTasks(); };
     btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; filterOverdue.checked=false; render(); };
 
-    btnAdd.onclick=()=>safeOpenTask(null);
+    btnAdd.onclick=()=>openMainAdd();
     btnExport.onclick=()=>exportWeekly();
     btnLists.onclick=()=>openLists();
 
     // Safety: delegate click in case header button is overlaid / re-rendered
     document.addEventListener("click",(e)=>{
       const add=e.target.closest("#btnAdd");
-      if(add){ e.preventDefault(); safeOpenTask(null); }
+      if(add){ e.preventDefault(); openMainAdd(); }
     }, {passive:false});
 
     taskClose.onclick=closeModals;
