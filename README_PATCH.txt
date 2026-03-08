@@ -1,14 +1,14 @@
-Kehoachtuan v6.4.4 - Fix renderReports not defined freeze
+Kehoachtuan v6.4.5 - Reports topbar Add button fix
 
-Replace in repo root:
+Fix:
+- Top bar '+ Thêm việc' becomes '+ Thêm báo cáo' in Báo cáo tab
+- Clicking top bar Add opens Report modal when in Báo cáo tab, otherwise Task modal
+- Non-manager cannot add reports (button disabled + alert)
+
+Replace:
 - index.html
 - styles.css
 - app.js
 
-Fix:
-- Guard renderReports() calls so site won't freeze if user caches/mixes versions.
-- Expose window.renderReports for debugging.
-- Cache bust URLs.
-
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.4.4&ts=1
+https://anhvt777.github.io/Kehoachtuan/?v=6.4.5&ts=1

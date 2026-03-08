@@ -1125,6 +1125,25 @@ function safeOpenTask(task){
       console.error(err);
       alert("Lỗi mở form: " + (err?.message || err));
     }
+
+  function safeOpenReport(rep){
+    try{
+      openReport(rep);
+    }catch(err){
+      console.error(err);
+      alert("Lỗi mở form báo cáo: " + (err?.message || err));
+    }
+  }
+
+  function safeOpenAdd(){
+    // Contextual add button: tasks vs reports
+    if(state.view==="reports"){
+      if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
+      return safeOpenReport(null);
+    }
+    return safeOpenTask(null);
+  }
+
   }
 
   function openTask(task){
@@ -1807,6 +1826,12 @@ const newLists={
     viewForecast.style.display = name==="forecast" ? "" : "none";
     if(viewReports) viewReports.style.display = name==="reports" ? "" : "none";
 
+    // Update top-bar Add button label by view
+    if(btnAdd){
+      const isRep = name==="reports";
+      btnAdd.textContent = isRep ? "+ Thêm báo cáo" : "+ Thêm việc";
+      btnAdd.disabled = isRep && !isManager(state.meId);
+    }
     render();
   }
 
@@ -1843,14 +1868,14 @@ const newLists={
     filterOverdue.onchange=()=>{ state.onlyOverdue=!!filterOverdue.checked; renderTasks(); };
     btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; filterOverdue.checked=false; render(); };
 
-    btnAdd.onclick=()=>safeOpenTask(null);
+    btnAdd.onclick=()=>safeOpenAdd();
     btnExport.onclick=()=>exportWeekly();
     btnLists.onclick=()=>openLists();
 
     // Safety: delegate click in case header button is overlaid / re-rendered
     document.addEventListener("click",(e)=>{
       const add=e.target.closest("#btnAdd");
-      if(add){ e.preventDefault(); safeOpenTask(null); }
+      if(add){ e.preventDefault(); safeOpenAdd(); }
     }, {passive:false});
 
     taskClose.onclick=closeModals;
