@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.3.1 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.3.2 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -180,6 +180,7 @@
 
   // ---- State ----
   const state={
+    _lastTouch: 0,
     week: pickWeekStartISO(toISO(new Date())),
     meId:"",
     prefillOwner:"",
@@ -254,6 +255,7 @@
   function closeModals(){
     taskBackdrop.classList.remove("open");
     listsBackdrop.classList.remove("open");
+    if(typeof fcBackdrop!=="undefined" && fcBackdrop) fcBackdrop.classList.remove("open");
     document.body.classList.remove("modal-open");
     document.body.style.overflow="";
   }
@@ -1417,6 +1419,20 @@ function safeOpenTask(task){
       
     // Forecast: click badge "Xem/Giao" (manager) -> choose view or assign
     fcCards.addEventListener("click",(e)=>{
+      // Prevent duplicate open after touch
+      if(Date.now() - (state._lastTouch||0) < 450) return;
+
+      // Tap KPI row -> open module modal
+      const rowTap = e.target.closest && e.target.closest("[data-fc-staff]");
+      if(rowTap){
+        const staffId = rowTap.getAttribute("data-fc-staff");
+        const metricKey = rowTap.getAttribute("data-fc-metric");
+        if(staffId && metricKey){
+          try{ openForecastModal(staffId, metricKey); }catch(err){ console.error(err); alert("Không mở được module nhập số: " + err.message); }
+        }
+        return;
+      }
+
       // Accordion toggle
       const tog = e.target.closest("[data-fc-toggle='1']");
       if(tog){
@@ -1447,6 +1463,22 @@ function safeOpenTask(task){
         window.scrollTo({top:0, behavior:"smooth"});
       }
     });
+
+    // iPhone: use touchend to open modal immediately (avoid delayed click)
+    fcCards.addEventListener("touchend",(e)=>{
+      state._lastTouch = Date.now();
+      let t = e.target;
+      if(t && t.nodeType===3) t = t.parentElement;
+      const rowTap = t && t.closest ? t.closest("[data-fc-staff]") : null;
+      if(rowTap){
+        const staffId = rowTap.getAttribute("data-fc-staff");
+        const metricKey = rowTap.getAttribute("data-fc-metric");
+        if(staffId && metricKey){
+          try{ openForecastModal(staffId, metricKey); }catch(err){ console.error(err); alert("Không mở được module nhập số: " + err.message); }
+        }
+      }
+    }, {passive:true});
+
 if(field==="actual") row.actual = numOrNull(el.value);
       if(field==="weekPlan") row.weekPlan = numOrNull(el.value);
       if(field==="quarterPlan") row.quarterPlan = numOrNull(el.value);
