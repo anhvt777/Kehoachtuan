@@ -4,10 +4,6 @@
 */
 (() => {
   "use strict";
-  console.info("Kehoachtuan loaded v6.4.2");
-  // Safety: avoid hard crash if renderReports is missing due to partial deploy/cache
-  if(typeof renderReports !== "function"){ window.renderReports = function(){ /* noop */ }; }
-
 
   // IMPORTANT: define global handlers early so inline onclick never fails
   // (prevents: window.__fcOpen is not a function)
@@ -378,12 +374,32 @@
 
   function fillSelect(el, items, opts={}){
     const {valueKey=null,labelFn=null,emptyLabel=null}=opts;
+    if(!el) return;
     el.innerHTML="";
     if(emptyLabel!==null){
       const o=document.createElement("option");
       o.value=""; o.textContent=emptyLabel;
       el.appendChild(o);
     }
+    (items||[]).forEach(it=>{
+      const o=document.createElement("option");
+      if(valueKey){
+        o.value = String(it && it[valueKey]!==undefined ? it[valueKey] : "");
+      }else{
+        o.value = String(it && it.id!==undefined ? it.id : it);
+      }
+      if(labelFn){
+        o.textContent = String(labelFn(it));
+      }else if(it && typeof it==="object"){
+        o.textContent = String(it.name!==undefined ? it.name : o.value);
+      }else{
+        o.textContent = String(it);
+      }
+      el.appendChild(o);
+    });
+  }
+
+  
 
   // Fill dropdown options inside Task modal (call ONLY when opening the modal)
   function fillTaskModalOptions(){
@@ -1104,14 +1120,6 @@ async function syncAll(){
 
   // Prefill assignee when manager assigns from Forecast
   state.prefillOwnerId = "";
-
-  function openMainAdd(){
-    if(state.view==="reports"){
-      if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
-      return openReport(null);
-    }
-    return safeOpenTask(null);
-  }
 function safeOpenTask(task){
     try{
       openTask(task);
@@ -1367,7 +1375,7 @@ const newLists={
     };
     saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
-    if(typeof renderReports==='function') renderReports();
+    renderReports();
     renderForecastCards();
     setupAutoCompactTopbar();
     // Expose handlers for inline onclick (iPhone reliability)
@@ -1793,12 +1801,6 @@ const newLists={
 // ---- View switch ----
   function setView(name){
     state.view=name;
-
-    // Main add button context
-    if(btnAdd){
-      if(name==="reports"){ btnAdd.textContent="+ Thêm báo cáo"; }
-      else { btnAdd.textContent="+ Thêm việc"; }
-    }
     tabTasks.classList.toggle("active", name==="tasks");
     tabForecast.classList.toggle("active", name==="forecast");
     if(tabReports) tabReports.classList.toggle("active", name==="reports");
@@ -1812,7 +1814,7 @@ const newLists={
 
   function render(){
     refreshDropdowns();
-    if(typeof renderReports==='function') renderReports();
+    renderReports();
     if(state.view==="tasks") renderTasks();
     if(state.view==="forecast") renderForecastCards();
     if(state.view==="reports") renderReports();
@@ -1843,14 +1845,14 @@ const newLists={
     filterOverdue.onchange=()=>{ state.onlyOverdue=!!filterOverdue.checked; renderTasks(); };
     btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; filterOverdue.checked=false; render(); };
 
-    btnAdd.onclick=()=>openMainAdd();
+    btnAdd.onclick=()=>safeOpenTask(null);
     btnExport.onclick=()=>exportWeekly();
     btnLists.onclick=()=>openLists();
 
     // Safety: delegate click in case header button is overlaid / re-rendered
     document.addEventListener("click",(e)=>{
       const add=e.target.closest("#btnAdd");
-      if(add){ e.preventDefault(); openMainAdd(); }
+      if(add){ e.preventDefault(); safeOpenTask(null); }
     }, {passive:false});
 
     taskClose.onclick=closeModals;
@@ -2039,7 +2041,7 @@ const newLists={
   function init(){
     elWeek.value = state.week;
     refreshDropdowns();
-    if(typeof renderReports==='function') renderReports();
+    renderReports();
     renderForecastCards();
     setupTimer();
     wire();
