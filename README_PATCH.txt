@@ -1,14 +1,14 @@
-Kehoachtuan Forecast Tap Module Fix v6.3.2
+Kehoachtuan Forecast Module Tap Fix v6.3.3
 
 Replace in repo root:
 - index.html
+- styles.css
 - app.js
-(styles.css unchanged)
 
 Fix:
-- Tap on KPI rows (div with data-fc-staff) now opens the input module modal reliably on iPhone.
-- Adds touchend handler and prevents double-open with a debounce.
-- closeModals now also closes forecast modal (fcBackdrop), so the X works.
+- KPI rows are now <button> elements with inline onclick calling window.__fcOpen(staffId, metricKey)
+  -> eliminates issues where delegated click/touch handlers don't fire.
+- Badge Xem/Giao is also a <button> with inline onclick.
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.3.2
+https://anhvt777.github.io/Kehoachtuan/?v=6.3.3

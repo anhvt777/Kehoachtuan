@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.3.2 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.3.3 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -543,7 +543,7 @@
         const dCls = delta===null ? "" : (delta<0?"neg":"pos");
         const gCls = gap===null ? "" : (gap<0?"neg":"pos");
 
-        return `<div class="fcRow fcTap" data-fc-staff="__TOTAL__" data-fc-metric="${escapeHtml(m.key)}">
+        return `<button type="button" class="fcRow fcTap" data-fc-staff="__TOTAL__" data-fc-metric="${escapeHtml(m.key)}" onclick="window.__fcOpen(\'__TOTAL__\',\'${escapeHtml(m.key)}\')">
           <div class="fcRowLeft">
             <div class="fcRowName">${escapeHtml(m.name)}</div>
             ${m.unit?`<div class="fcRowUnit">${escapeHtml(m.unit)}</div>`:""}
@@ -555,7 +555,7 @@
             <span class="chip">KH Quý: ${q===null?"-":fmtNum(q)}</span>
             <span class="chip ${gCls}">GAP: ${gap===null?"-":fmtNum(gap)}</span>
           </div>
-        </div>`;
+        </button>`;
       }).join("");
 
       cards.push(`<div class="fcCard">
@@ -579,7 +579,7 @@
         const {a,w,q,delta,gap} = computeDeltaGap(row, m.kind);
         const dCls = delta===null ? "" : (delta<0?"neg":"pos");
         const gCls = gap===null ? "" : (gap<0?"neg":"pos");
-        return `<div class="fcRow fcTap" data-fc-staff="${escapeHtml(s.id)}" data-fc-metric="${escapeHtml(m.key)}">
+        return `<button type="button" class="fcRow fcTap" data-fc-staff="${escapeHtml(s.id)}" data-fc-metric="${escapeHtml(m.key)}" onclick="window.__fcOpen(\'${escapeHtml(s.id)}\',\'${escapeHtml(m.key)}\')">
           <div class="fcRowLeft">
             <div class="fcRowName">${escapeHtml(m.name)}</div>
             ${m.unit?`<div class="fcRowUnit">${escapeHtml(m.unit)}</div>`:""}
@@ -589,7 +589,7 @@
             ${m.kind==="5col" ? `<span class="chip ${dCls}">Δ: ${delta===null?"-":fmtNum(delta)}</span>` : ``}
             <span class="chip ${gCls}">GAP: ${gap===null?"-":fmtNum(gap)}</span>
           </div>
-        </div>`;
+        </button>`;
       }).join("");
 
       cards.push(`<div class="fcCard">
@@ -598,7 +598,7 @@
             <div class="fcTitle">${escapeHtml(s.id)} - ${escapeHtml(s.name)}</div>
             <div class="fcSubtitle">Chạm từng chỉ tiêu để nhập số • module đầy đủ</div>
           </div>
-          <div class="fcBadge" data-fc-badge="1" data-staff="${escapeHtml(s.id)}">${escapeHtml(badge)}</div>
+          <button type="button" class="fcBadge" data-fc-badge="1" data-staff="${escapeHtml(s.id)}" onclick="window.__fcBadge(\'${escapeHtml(s.id)}\')">${escapeHtml(badge)}</button>
         </div>
         <div class="fcRowList">${rows}</div>
         <div class="smallHelp" style="margin-top:10px">CB nhập <b>KH Tuần</b>. QL nhập/Import <b>Đã TH</b> &amp; <b>KH Quý</b>.</div>
@@ -1051,6 +1051,16 @@ function safeOpenTask(task){
     saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
     setupAutoCompactTopbar();
+    // Expose handlers for inline onclick (iPhone reliability)
+    window.__fcOpen = (staffId, metricKey) => { try{ openForecastModal(staffId, metricKey); }catch(e){ console.error(e); alert('Không mở được module nhập số: ' + e.message); } };
+    window.__fcBadge = (staffId) => {
+      try{
+        if(!isManager(state.meId)) return;
+        const ok = confirm('Chọn OK để GIAO VIỆC cho cán bộ này.\nChọn Cancel để XEM số liệu của cán bộ này.');
+        if(ok){ setView('tasks'); openTask(null); if(fmOwner) fmOwner.value = staffId; }
+        else { state.fcStaff = staffId; if(fcStaffFilter) fcStaffFilter.value = staffId; setView('forecast'); renderForecastCards(); }
+      }catch(e){ console.error(e); }
+    };
     setupTimer();
     syncAll();
   }

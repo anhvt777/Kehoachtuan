@@ -793,3 +793,29 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
   .fcRow{ padding:10px 10px; }
   .chip{ padding:6px 8px; }
 }
+
+
+
+/* =========================
+   Forecast tap reliability (button rows)
+   v6.3.3
+   ========================= */
+button.fcRow, button.fcBadge {
+  -webkit-appearance:none;
+  appearance:none;
+  font: inherit;
+  color: inherit;
+}
+button.fcRow {
+  text-align:left;
+  width:100%;
+}
+button.fcRow:focus-visible {
+  outline: 2px solid rgba(0,107,91,.35);
+  outline-offset: 2px;
+}
+button.fcBadge {
+  background: rgba(0,107,91,.10);
+  border: 1px solid rgba(0,107,91,.22);
+  cursor:pointer;
+}
