@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.3.7">
+  <link rel="stylesheet" href="styles.css?v=6.4.0">
 </head>
 <body>
   <div class="container">
@@ -12,7 +12,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.3.7)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.4.0)</span></div>
       </div>
 
       <div class="hright">
@@ -39,6 +39,7 @@
     <div class="tabsTop">
       <button class="tabBtn active" id="tabTasks">Công việc</button>
       <button class="tabBtn" id="tabForecast">Dự kiến số liệu</button>
+      <button class="tabBtn" id="tabReports">Báo cáo</button>
     </div>
   </div>
 
@@ -107,7 +108,58 @@
     </section>
   </div>
 
-  <!-- Task modal -->
+  
+    <!-- REPORTS VIEW -->
+    <section id="viewReports" style="display:none">
+      <div class="note">
+        <b>Theo dõi báo cáo</b>: Chỉ <b>quản lý</b> giao báo cáo xuống. Báo cáo có <b>deadline ngày/giờ</b>, chọn <b>CB đầu mối</b> và <b>CB phối hợp</b>.<br/>
+        Quy tắc: <b>tất cả CB phối hợp</b> phải chuyển trạng thái <b>Đã hoàn thành</b> trước deadline, khi đó <b>CB đầu mối</b> mới được chuyển báo cáo sang <b>Hoàn thành</b>.
+      </div>
+
+      <div class="grid4" style="margin-top:12px">
+        <div class="card"><div class="k">Tổng báo cáo</div><div class="v" id="repTotal">0</div></div>
+        <div class="card"><div class="k">Hoàn thành</div><div class="v" id="repDone">0</div></div>
+        <div class="card"><div class="k">Sắp đến hạn</div><div class="v" id="repDueSoon">0</div></div>
+        <div class="card"><div class="k">Quá hạn</div><div class="v" id="repOverdue">0</div></div>
+      </div>
+
+      <div class="filters" style="margin-top:12px">
+        <select id="repFilterLead"></select>
+        <select id="repFilterType"></select>
+        <select id="repFilterStatus"></select>
+        <label class="chk"><input type="checkbox" id="repOnlyMine"/> Chỉ việc của tôi</label>
+        <label class="chk"><input type="checkbox" id="repOnlyDueSoon"/> Chỉ sắp đến hạn</label>
+        <button class="btn ghost" id="btnRepClear">Xoá lọc</button>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap">
+        <button class="btn primary" id="btnRepAdd" style="display:none">+ Thêm báo cáo</button>
+        <div class="smallHelp">Màu cảnh báo: <span class="pillWarn">Sắp đến hạn</span> • <span class="pillDanger">Quá hạn</span>. Ngưỡng sắp đến hạn: 24 giờ.</div>
+      </div>
+
+      <div class="tableWrap" style="margin-top:12px">
+        <div class="tableScroll">
+          <table id="repTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Loại báo cáo</th>
+                <th>Báo cáo</th>
+                <th>Deadline</th>
+                <th>Đầu mối</th>
+                <th>Phối hợp</th>
+                <th>Tiến độ phối hợp</th>
+                <th>Trạng thái</th>
+                <th>Tác vụ</th>
+              </tr>
+            </thead>
+            <tbody id="repTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+<!-- Task modal -->
   <div class="backdrop" id="taskBackdrop">
     <div class="modal">
       <div class="mhead">
@@ -168,6 +220,8 @@
             <div><div class="k">KPI dự kiến</div><div class="sub" style="margin:6px 0;color:var(--muted)">Chỉ dùng cho tab <b>Dự kiến số liệu</b> (độc lập với KPI ở Công việc). Chỉ đổi <b>Tên</b>/<b>Đơn vị</b>/<b>Loại</b>, không đổi Mã.</div><div id="fcKpiList"></div><button class="btn ghost" id="btnAddFcKpi">+ Thêm KPI dự kiến</button></div>
             <div><div class="k">Nhóm công việc</div><div id="groupList"></div><button class="btn ghost" id="btnAddGroup">+ Thêm nhóm</button></div>
             <div><div class="k">Output metric</div><div id="metricList"></div><button class="btn ghost" id="btnAddMetric">+ Thêm metric</button></div>
+            <div><div class="k">Loại báo cáo</div><div id="repTypeList"></div><button class="btn ghost" id="btnAddRepType">+ Thêm loại báo cáo</button></div>
+            <div><div class="k">Trạng thái báo cáo</div><div id="repStatusList"></div><button class="btn ghost" id="btnAddRepStatus">+ Thêm trạng thái</button></div>
             <div><div class="k">Priority</div><div id="priorityList"></div><button class="btn ghost" id="btnAddPriority">+ Thêm priority</button></div>
           </div>
         </div>
@@ -248,11 +302,76 @@
   </div>
 
 
+
+  <!-- Report modal -->
+  <div class="backdrop" id="repBackdrop">
+    <div class="modal">
+      <div class="mhead">
+        <h2 id="repTitle">Thêm báo cáo</h2>
+        <button class="iconBtn" id="repClose" aria-label="Đóng">×</button>
+      </div>
+      <div class="mbody">
+        <form id="repForm">
+          <input type="hidden" id="repId"/>
+          <div class="formGrid">
+            <div class="field">
+              <label>Loại báo cáo *</label>
+              <select id="repType"></select>
+            </div>
+            <div class="field">
+              <label>Deadline (ngày/giờ) *</label>
+              <input id="repDeadline" type="datetime-local"/>
+            </div>
+
+            <div class="field" style="grid-column:1/-1">
+              <label>Tên báo cáo *</label>
+              <input id="repName" type="text" placeholder="VD: Báo cáo tuần nguồn vốn, Báo cáo tồn kho ấn chỉ..."/>
+            </div>
+
+            <div class="field">
+              <label>CB đầu mối *</label>
+              <select id="repLead"></select>
+            </div>
+
+            <div class="field">
+              <label>Trạng thái (đầu mối)</label>
+              <select id="repStatus"></select>
+              <div class="smallHelp">Đầu mối chỉ được chuyển <b>Hoàn thành</b> khi tất cả CB phối hợp đã “Đã hoàn thành”.</div>
+            </div>
+
+            <div class="field" style="grid-column:1/-1">
+              <label>CB phối hợp</label>
+              <div id="repCollabPick" class="chipPick"></div>
+              <div class="smallHelp">Chọn nhiều cán bộ phối hợp. Mỗi người sẽ tự cập nhật “Đã hoàn thành”.</div>
+            </div>
+
+            <div class="field" style="grid-column:1/-1">
+              <label>Ghi chú / Nội dung</label>
+              <textarea id="repNote" rows="3" placeholder="Yêu cầu nội dung, định dạng file, nơi nộp, người nhận..."></textarea>
+            </div>
+
+            <div class="field" style="grid-column:1/-1">
+              <label>Tiến độ phối hợp</label>
+              <div id="repPartsBox" class="partsBox"></div>
+              <div class="smallHelp">Nếu bạn là CB phối hợp, hãy chuyển trạng thái của mình sang <b>Đã hoàn thành</b>.</div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="mfoot">
+        <button class="btn ghost" id="repCancel" type="button">Đóng</button>
+        <button class="btn primary" id="repSave" type="submit" form="repForm">Lưu</button>
+      </div>
+    </div>
+  </div>
+
+
+
   <input id="fcImportFile" type="file" accept=".xlsx,.xls" style="display:none"/>
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js?v=6.3.7"></script>
-  <script src="app.js?v=6.3.7"></script>
+  <script src="config.js?v=6.4.0"></script>
+  <script src="app.js?v=6.4.0"></script>
 </body>
 </html>

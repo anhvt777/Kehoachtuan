@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.3.7 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.4.0 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -63,6 +63,57 @@
   function fmtDDMMYYYY(iso){
     const d=parseISO(iso); if(!d) return "";
     return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`;
+  }
+
+  function fmtDDMMYYYYHHmm(iso){
+    if(!iso) return "";
+    const d=new Date(iso);
+    if(Number.isNaN(d.getTime())) return String(iso);
+    const dd=String(d.getDate()).padStart(2,"0");
+    const mm=String(d.getMonth()+1).padStart(2,"0");
+    const yyyy=d.getFullYear();
+    const hh=String(d.getHours()).padStart(2,"0");
+    const mi=String(d.getMinutes()).padStart(2,"0");
+    return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
+  }
+  function toDatetimeLocalValue(iso){
+    if(!iso) return "";
+    const d=new Date(iso);
+    if(Number.isNaN(d.getTime())) return "";
+    const pad=n=>String(n).padStart(2,"0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function fromDatetimeLocalValue(v){
+    if(!v) return "";
+    const d=new Date(v);
+    return d.toISOString();
+  }
+  function uniq(arr){ return Array.from(new Set((arr||[]).map(String))).filter(Boolean); }
+
+  function isLead(rep){ return String(rep.leadId||"")===String(state.meId||""); }
+  function isCollaborator(rep){ return (rep.collaborators||[]).map(String).includes(String(state.meId||"")); }
+  function allCollabsDone(rep){
+    const parts=rep.parts||{};
+    const collabs=(rep.collaborators||[]).map(String);
+    if(collabs.length===0) return true;
+    return collabs.every(id => String((parts[id]||{}).status||"") === "Done");
+  }
+  function repDueClass(rep){
+    const done = String(rep.status||"") === "Hoàn thành";
+    if(done) return "rep-done";
+    const dl=new Date(rep.deadline||"");
+    if(Number.isNaN(dl.getTime())) return "";
+    const diffH=(dl.getTime()-Date.now())/36e5;
+    if(diffH<0) return "rep-overdue";
+    if(diffH<=24) return "rep-duesoon";
+    return "";
+  }
+  function repProgressText(rep){
+    const collabs=(rep.collaborators||[]).map(String);
+    if(collabs.length===0) return "0/0";
+    const parts=rep.parts||{};
+    const done=collabs.filter(id=>String((parts[id]||{}).status||"") === "Done").length;
+    return `${done}/${collabs.length}`;
   }
   function mondayOf(d){
     const x=new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -224,6 +275,13 @@
     filterGroup:"",
     onlyOverdue:false,
     tasks:[],
+    reports: loadJSON("KHT_REPORTS") || [],
+    repFilterLead:"",
+    repFilterType:"",
+    repFilterStatus:"",
+    repOnlyMine:false,
+    repOnlyDueSoon:false,
+
     forecast: loadJSON(KEY_FC_LOCAL) || {}, // key: week|staff|metric
     fcStaff:"",
     fcMetric:"",
@@ -235,8 +293,8 @@
   // ---- DOM ----
   const elWeek=$("#weekPicker"), elMe=$("#mePicker");
   const btnAdd=$("#btnAdd"), btnExport=$("#btnExport"), btnLists=$("#btnLists");
-  const tabTasks=$("#tabTasks"), tabForecast=$("#tabForecast");
-  const viewTasks=$("#viewTasks"), viewForecast=$("#viewForecast");
+  const tabTasks=$("#tabTasks"), tabForecast=$("#tabForecast"), tabReports=$("#tabReports");
+  const viewTasks=$("#viewTasks"), viewForecast=$("#viewForecast"), viewReports=$("#viewReports");
 
   const tbody=$("#tasksTbody");
   const sumTotal=$("#sumTotal"), sumDone=$("#sumDone"), sumOverdue=$("#sumOverdue"), sumPct=$("#sumPct");
@@ -252,14 +310,27 @@
 
   // Lists modal
   const listsBackdrop=$("#listsBackdrop"), listsClose=$("#listsClose"), btnListsCancel=$("#btnListsCancel"), btnListsSave=$("#btnListsSave");
-  const staffList=$("#staffList"), statusList=$("#statusList"), groupList=$("#groupList"), priorityList=$("#priorityList"), kpiList=$("#kpiList"), metricList=$("#metricList"), fcKpiList=$("#fcKpiList");
-  const btnAddStaff=$("#btnAddStaff"), btnAddStatus=$("#btnAddStatus"), btnAddGroup=$("#btnAddGroup"), btnAddPriority=$("#btnAddPriority"), btnAddKpi=$("#btnAddKpi"), btnAddMetric=$("#btnAddMetric"), btnAddFcKpi=$("#btnAddFcKpi");
+  const staffList=$("#staffList"), statusList=$("#statusList"), groupList=$("#groupList"), priorityList=$("#priorityList"), kpiList=$("#kpiList"), metricList=$("#metricList"), fcKpiList=$("#fcKpiList"), repTypeList=$("#repTypeList"), repStatusList=$("#repStatusList");
+  const btnAddStaff=$("#btnAddStaff"), btnAddStatus=$("#btnAddStatus"), btnAddGroup=$("#btnAddGroup"), btnAddPriority=$("#btnAddPriority"), btnAddKpi=$("#btnAddKpi"), btnAddMetric=$("#btnAddMetric"), btnAddFcKpi=$("#btnAddFcKpi"), btnAddRepType=$("#btnAddRepType"), btnAddRepStatus=$("#btnAddRepStatus");
   const stMode=$("#stMode"), stInterval=$("#stInterval"), stUrl=$("#stUrl"), stKey=$("#stKey");
 
   // Forecast
   const fcStaffFilter=$("#fcStaffFilter"), fcMetricFilter=$("#fcMetricFilter"), btnFcImport=$("#btnFcImport"), btnFcToggle=$("#btnFcToggleEdit");
   const fcImportFile=$("#fcImportFile");
   const fcCards=$("#fcCards");
+  // Reports DOM
+  const repTotal=$("#repTotal"), repDone=$("#repDone"), repDueSoon=$("#repDueSoon"), repOverdue=$("#repOverdue");
+  const repFilterLead=$("#repFilterLead"), repFilterType=$("#repFilterType"), repFilterStatus=$("#repFilterStatus");
+  const repOnlyMine=$("#repOnlyMine"), repOnlyDueSoon=$("#repOnlyDueSoon"), btnRepClear=$("#btnRepClear");
+  const btnRepAdd=$("#btnRepAdd");
+  const repTbody=$("#repTbody");
+
+  // Report modal DOM
+  const repBackdrop=$("#repBackdrop"), repClose=$("#repClose"), repCancel=$("#repCancel"), repForm=$("#repForm");
+  const repTitle=$("#repTitle"), repId=$("#repId"), repType=$("#repType"), repDeadline=$("#repDeadline");
+  const repName=$("#repName"), repLead=$("#repLead"), repStatus=$("#repStatus"), repNote=$("#repNote");
+  const repCollabPick=$("#repCollabPick"), repPartsBox=$("#repPartsBox");
+
 
   // Forecast modal
   const fcBackdrop=$("#fcBackdrop");
@@ -641,6 +712,70 @@
       </div>`);
     }
 
+
+  function ensureReportFilters(){
+    const L=getLists();
+    const leadItems=[{id:"", name:"-- Lọc theo đầu mối --"}].concat((L.staff||[]).filter(s=>String(s.id)!=="54000600").map(s=>({id:String(s.id), name:`${s.id} - ${s.name}`})));
+    fillSelect(repFilterLead, leadItems, {valueKey:"id", labelKey:"name"});
+    fillSelect(repFilterType, ["", ...(L.reportTypes||[])], {emptyLabel:"-- Lọc theo loại báo cáo --"});
+    fillSelect(repFilterStatus, ["", ...(L.reportStatuses||[])], {emptyLabel:"-- Lọc theo trạng thái --"});
+  }
+
+  function renderReports(){
+    if(!repTbody) return;
+    ensureReportFilters();
+    const L=getLists();
+    const staffMap=new Map((L.staff||[]).map(s=>[String(s.id), s]));
+    const me=String(state.meId||"");
+
+    let reps=[...(state.reports||[])];
+
+    if(state.repFilterLead) reps=reps.filter(r=>String(r.leadId||"")===String(state.repFilterLead));
+    if(state.repFilterType) reps=reps.filter(r=>String(r.type||"")===String(state.repFilterType));
+    if(state.repFilterStatus) reps=reps.filter(r=>String(r.status||"")===String(state.repFilterStatus));
+    if(state.repOnlyMine) reps=reps.filter(r=>String(r.leadId||"")===me || (r.collaborators||[]).map(String).includes(me) || String(r.createdById||"")===me);
+    if(state.repOnlyDueSoon) reps=reps.filter(r=>{const c=repDueClass(r); return c==="rep-duesoon"||c==="rep-overdue";});
+
+    const total=reps.length;
+    const done=reps.filter(r=>String(r.status||"")==="Hoàn thành").length;
+    const dueSoon=reps.filter(r=>repDueClass(r)==="rep-duesoon").length;
+    const overdue=reps.filter(r=>repDueClass(r)==="rep-overdue").length;
+    repTotal.textContent=String(total);
+    repDone.textContent=String(done);
+    repDueSoon.textContent=String(dueSoon);
+    repOverdue.textContent=String(overdue);
+
+    reps.sort((a,b)=> new Date(a.deadline||0)-new Date(b.deadline||0));
+
+    repTbody.innerHTML = reps.map(rep=>{
+      const lead = staffMap.get(String(rep.leadId||"")) || {name: rep.leadId||""};
+      const collabs=(rep.collaborators||[]).map(String);
+      const collabNames = collabs.map(id => (staffMap.get(id)?.name)||id).join(", ");
+      const prog = repProgressText(rep);
+      const cls = repDueClass(rep);
+
+      const createdByName = (staffMap.get(String(rep.createdById||""))?.name) || rep.createdById || "";
+
+      return `<tr class="${cls}">
+        <td data-label="ID">#${escapeHtml(String(rep.id||""))}</td>
+        <td data-label="Loại báo cáo">${escapeHtml(rep.type||"")}</td>
+        <td data-label="Báo cáo">
+          <div style="font-weight:900">${escapeHtml(rep.name||"")}</div>
+          <div class="smallHelp">Giao bởi: ${escapeHtml(createdByName)}</div>
+        </td>
+        <td data-label="Deadline">${escapeHtml(fmtDDMMYYYYHHmm(rep.deadline))}</td>
+        <td data-label="Đầu mối">${escapeHtml(lead.name||"")}</td>
+        <td data-label="Phối hợp">${escapeHtml(collabNames||"-")}</td>
+        <td data-label="Tiến độ phối hợp">${escapeHtml(prog)}</td>
+        <td data-label="Trạng thái">${escapeHtml(rep.status||"")}</td>
+        <td data-label="Tác vụ">
+          <button class="btn-mini" data-rep="open" data-id="${escapeHtml(String(rep.id))}">Mở</button>
+          <button class="btn-mini danger" data-rep="del" data-id="${escapeHtml(String(rep.id))}" ${isManager(state.meId)?"":"disabled"}>Xoá</button>
+        </td>
+      </tr>`;
+    }).join("");
+  }
+
     // Staff cards
     for(const s of visibleStaff){
       const badge=(String(state.meId)===String(s.id)) ? "Tôi" : (meIsMgr ? "Xem/Giao" : "CB");
@@ -857,7 +992,52 @@
   }
 
   // ---- Sync ----
-  async function syncAll(){
+  
+
+  async function loadReportsFromSupabase(){
+    const s=getSettings();
+    if(String(s.storageMode||"local")!=="supabase") return;
+    if(!sbBase() || !s.supabaseAnonKey) return;
+    try{
+      const rows=await fetch(sbUrl("reports?select=*"), {method:"GET", headers:sbHeaders()}).then(r=>r.json());
+      state.reports=(rows||[]).map(r=>({
+        id: String(r.id),
+        createdAt: r.created_at || "",
+        type: r.type || "",
+        name: r.name || "",
+        deadline: r.deadline || "",
+        leadId: r.lead_id || "",
+        createdById: r.created_by_id || "",
+        status: r.status || "Chưa bắt đầu",
+        note: r.note || "",
+        collaborators: r.collaborators || [],
+        parts: r.parts || {}
+      }));
+      saveJSON("KHT_REPORTS", state.reports);
+    }catch(e){
+      console.error(e);
+    }
+  }
+
+  async function saveReportToSupabase(rep){
+    const s=getSettings();
+    if(String(s.storageMode||"local")!=="supabase") return;
+    if(!sbBase() || !s.supabaseAnonKey) return;
+    const payload={
+      id: String(rep.id),
+      type: rep.type,
+      name: rep.name,
+      deadline: rep.deadline,
+      lead_id: rep.leadId,
+      created_by_id: rep.createdById,
+      status: rep.status,
+      note: rep.note,
+      collaborators: rep.collaborators || [],
+      parts: rep.parts || {}
+    };
+    await fetch(sbUrl("reports"), {method:"POST", headers:sbHeaders(), body: JSON.stringify(payload)}).then(r=>r.json());
+  }
+async function syncAll(){
     if(state.syncing) return;
     state.syncing=true;
     if(document.body.classList.contains("modal-open")){
@@ -1103,6 +1283,8 @@ function setListTab(name){
     priorityList.innerHTML=""; (L.priorities||[]).forEach(x=>priorityList.appendChild(mkRow1(String(x))));
     kpiList.innerHTML=""; (L.kpis||[]).forEach(x=>kpiList.appendChild(mkRow1(String(x))));
     metricList.innerHTML=""; (L.outputMetrics||[]).forEach(x=>metricList.appendChild(mkRow1(String(x))));
+    if(repTypeList){ repTypeList.innerHTML=""; (L.reportTypes||[]).forEach(x=>repTypeList.appendChild(mkRow1(String(x)))); }
+    if(repStatusList){ repStatusList.innerHTML=""; (L.reportStatuses||[]).forEach(x=>repStatusList.appendChild(mkRow1(String(x)))); }
     if(fcKpiList){
       fcKpiList.innerHTML="";
       const fm = (L.forecastMetrics && L.forecastMetrics.length) ? L.forecastMetrics : (CFG.forecastMetrics||[]);
@@ -1172,6 +1354,7 @@ const newLists={
     };
     saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
+    renderReports();
     renderForecastCards();
     setupAutoCompactTopbar();
     // Expose handlers for inline onclick (iPhone reliability)
@@ -1427,27 +1610,200 @@ const newLists={
     XLSX.writeFile(wb, `KehoachTuan_${state.week}.xlsx`);
   }
 
-  // ---- View switch ----
+  
+
+  function fillReportModalSelects(){
+    const L=getLists();
+    fillSelect(repType, L.reportTypes||[], {emptyLabel:"-- Chọn --"});
+    fillSelect(repLead, (L.staff||[]).filter(s=>String(s.id)!=="54000600"), {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
+    fillSelect(repStatus, L.reportStatuses||[], {emptyLabel:"-- Chọn --"});
+  }
+
+  function buildCollabPick(selected){
+    const L=getLists();
+    const sel=new Set((selected||[]).map(String));
+    repCollabPick.innerHTML="";
+    (L.staff||[]).filter(s=>String(s.id)!=="54000600").forEach(s=>{
+      const div=document.createElement("div");
+      div.className="chipItem"+(sel.has(String(s.id))?" on":"");
+      div.dataset.id=String(s.id);
+      div.textContent=`${s.id} - ${s.name}`;
+      div.onclick=()=>div.classList.toggle("on");
+      repCollabPick.appendChild(div);
+    });
+  }
+  function readCollabPick(){
+    return Array.from(repCollabPick.querySelectorAll(".chipItem.on")).map(x=>x.dataset.id);
+  }
+
+  function renderPartsBox(rep){
+    const L=getLists();
+    const staffMap=new Map((L.staff||[]).map(s=>[String(s.id), s]));
+    const collabs=uniq(rep.collaborators||[]);
+    const parts=rep.parts||{};
+    repPartsBox.innerHTML="";
+    if(collabs.length===0){
+      repPartsBox.innerHTML='<div class="smallHelp">Không có cán bộ phối hợp.</div>';
+      return;
+    }
+    collabs.forEach(id=>{
+      const st=staffMap.get(String(id))||{name:id};
+      const p=parts[String(id)]||{status:"Pending", updatedAt:""};
+      const row=document.createElement("div");
+      row.className="partRow";
+      const left=document.createElement("div");
+      left.className="partLeft";
+      left.innerHTML=`<div class="partName">${escapeHtml(st.name||id)}</div><div class="partMeta">${p.updatedAt?("Cập nhật: "+escapeHtml(fmtDDMMYYYYHHmm(p.updatedAt))):"Chưa cập nhật"}</div>`;
+      const right=document.createElement("div");
+      right.className="partRight";
+      const btn=document.createElement("button");
+      btn.type="button";
+      btn.className="partBtn "+(String(p.status)==="Done"?"done":"pending");
+      btn.textContent=(String(p.status)==="Done")?"Đã hoàn thành":"Chưa xong";
+      const canToggle = isManager(state.meId) || String(state.meId)===String(id);
+      btn.disabled=!canToggle;
+      btn.onclick=()=>{
+        rep.parts=rep.parts||{};
+        const cur=rep.parts[String(id)]||{status:"Pending"};
+        const next=(String(cur.status)==="Done")?"Pending":"Done";
+        rep.parts[String(id)]={...cur,status:next,updatedAt:new Date().toISOString()};
+        renderPartsBox(rep);
+      };
+      right.appendChild(btn);
+      row.appendChild(left); row.appendChild(right);
+      repPartsBox.appendChild(row);
+    });
+  }
+
+  function openReport(rep){
+    fillReportModalSelects();
+    const manager=isManager(state.meId);
+    const me=String(state.meId||"");
+    const obj = rep ? JSON.parse(JSON.stringify(rep)) : {
+      id:"",
+      createdAt:new Date().toISOString(),
+      type:"",
+      name:"",
+      deadline:"",
+      leadId:"",
+      createdById: me,
+      status:"Chưa bắt đầu",
+      note:"",
+      collaborators:[],
+      parts:{}
+    };
+    repBackdrop._repObj=obj;
+
+    repTitle.textContent = rep ? "Cập nhật báo cáo" : "Thêm báo cáo";
+    repId.value=obj.id||"";
+    repType.value=obj.type||"";
+    repName.value=obj.name||"";
+    repDeadline.value=toDatetimeLocalValue(obj.deadline)||"";
+    repLead.value=obj.leadId||"";
+    repStatus.value=obj.status||"Chưa bắt đầu";
+    repNote.value=obj.note||"";
+
+    buildCollabPick(obj.collaborators||[]);
+    renderPartsBox(obj);
+
+    // permissions
+    repType.disabled=!manager;
+    repName.disabled=!manager;
+    repDeadline.disabled=!manager;
+    repLead.disabled=!manager;
+    Array.from(repCollabPick.querySelectorAll(".chipItem")).forEach(ch=>ch.style.pointerEvents = manager ? "auto":"none");
+    repNote.disabled = !(manager || isLead(obj) || isCollaborator(obj));
+    repStatus.disabled = !(manager || String(obj.leadId||"")===me);
+
+    openModal(repBackdrop);
+  }
+
+  async function saveReport(){
+    const obj=repBackdrop._repObj;
+    if(!obj) return closeModals();
+    const manager=isManager(state.meId);
+    const me=String(state.meId||"");
+
+    if(manager){
+      obj.type=String(repType.value||"").trim();
+      obj.name=String(repName.value||"").trim();
+      obj.deadline=fromDatetimeLocalValue(repDeadline.value);
+      obj.leadId=String(repLead.value||"").trim();
+      obj.collaborators=uniq(readCollabPick().filter(id=>id!==String(obj.leadId)));
+    }
+    obj.note=String(repNote.value||"");
+
+    // validate required
+    if(manager){
+      if(!obj.type || !obj.name || !obj.deadline || !obj.leadId){
+        alert("Vui lòng nhập đủ: Loại báo cáo, Tên báo cáo, Deadline, CB đầu mối.");
+        return;
+      }
+    }
+
+    // ensure parts
+    obj.parts=obj.parts||{};
+    (obj.collaborators||[]).forEach(id=>{
+      if(!obj.parts[String(id)]) obj.parts[String(id)]={status:"Pending",updatedAt:""};
+    });
+    for(const k of Object.keys(obj.parts)){
+      if(!(obj.collaborators||[]).map(String).includes(String(k))) delete obj.parts[k];
+    }
+
+    // status rules
+    const next=String(repStatus.value||obj.status||"");
+    if(next==="Hoàn thành" && !(manager)){
+      if(!allCollabsDone(obj)){
+        alert("Chưa thể Hoàn thành: còn CB phối hợp chưa 'Đã hoàn thành'.");
+        return;
+      }
+      obj.status="Hoàn thành";
+    }else{
+      obj.status=next;
+    }
+
+    // id
+    if(!obj.id){
+      const maxId=Math.max(0,...(state.reports||[]).map(r=>Number(r.id)||0));
+      obj.id=String(maxId+1);
+      obj.createdById=me;
+    }
+
+    const i=(state.reports||[]).findIndex(r=>String(r.id)===String(obj.id));
+    if(i>=0) state.reports[i]=obj; else state.reports.push(obj);
+    saveJSON("KHT_REPORTS", state.reports);
+    try{ await saveReportToSupabase(obj); }catch(e){ console.error(e); }
+
+    closeModals();
+    renderReports();
+  }
+// ---- View switch ----
   function setView(name){
     state.view=name;
     tabTasks.classList.toggle("active", name==="tasks");
     tabForecast.classList.toggle("active", name==="forecast");
+    if(tabReports) tabReports.classList.toggle("active", name==="reports");
+
     viewTasks.style.display = name==="tasks" ? "" : "none";
     viewForecast.style.display = name==="forecast" ? "" : "none";
+    if(viewReports) viewReports.style.display = name==="reports" ? "" : "none";
+
     render();
   }
 
   function render(){
     refreshDropdowns();
-    renderForecastCards();
+    renderReports();
     if(state.view==="tasks") renderTasks();
-    else renderForecastCards();
+    if(state.view==="forecast") renderForecastCards();
+    if(state.view==="reports") renderReports();
   }
 
   // ---- Event wiring ----
   function wire(){
     tabTasks.onclick=()=>setView("tasks");
     tabForecast.onclick=()=>setView("forecast");
+    if(tabReports) tabReports.onclick=()=>setView("reports");
 
     elWeek.onchange=()=>{
       state.week = pickWeekStartISO(elWeek.value);
@@ -1587,6 +1943,59 @@ const newLists={
       }
     });
 
+
+
+    // Reports filters
+    if(repFilterLead){
+      repFilterLead.onchange=()=>{ state.repFilterLead=repFilterLead.value; renderReports(); };
+      repFilterType.onchange=()=>{ state.repFilterType=repFilterType.value; renderReports(); };
+      repFilterStatus.onchange=()=>{ state.repFilterStatus=repFilterStatus.value; renderReports(); };
+      repOnlyMine.onchange=()=>{ state.repOnlyMine=repOnlyMine.checked; renderReports(); };
+      repOnlyDueSoon.onchange=()=>{ state.repOnlyDueSoon=repOnlyDueSoon.checked; renderReports(); };
+
+      btnRepClear.onclick=()=>{
+        state.repFilterLead=""; state.repFilterType=""; state.repFilterStatus="";
+        state.repOnlyMine=false; state.repOnlyDueSoon=false;
+        repFilterLead.value=""; repFilterType.value=""; repFilterStatus.value="";
+        repOnlyMine.checked=false; repOnlyDueSoon.checked=false;
+        renderReports();
+      };
+
+      btnRepAdd.onclick=()=>{
+        if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
+        openReport(null);
+      };
+
+      repTbody.addEventListener("click",(e)=>{
+        const b=e.target.closest("button[data-rep]");
+        if(!b) return;
+        const id=b.getAttribute("data-id");
+        const act=b.getAttribute("data-rep");
+        const rep=(state.reports||[]).find(r=>String(r.id)===String(id));
+        if(act==="open" && rep) openReport(rep);
+        if(act==="del"){
+          if(!isManager(state.meId)) return;
+          if(!confirm("Xoá báo cáo này?")) return;
+          state.reports=(state.reports||[]).filter(r=>String(r.id)!==String(id));
+          saveJSON("KHT_REPORTS", state.reports);
+          const s=getSettings();
+          if(String(s.storageMode||"local")==="supabase"){
+            fetch(sbUrl(`reports?id=eq.${encodeURIComponent(id)}`), {method:"DELETE", headers:sbHeaders()}).catch(console.error);
+          }
+          renderReports();
+        }
+      });
+
+      // Report modal events
+      repClose.onclick=closeModals;
+      repCancel.onclick=closeModals;
+      repBackdrop.onclick=(e)=>{ if(e.target===repBackdrop) closeModals(); };
+      repForm.addEventListener("submit",(e)=>{ e.preventDefault(); saveReport(); });
+    }
+
+    // Danh mục: báo cáo
+    if(btnAddRepType && repTypeList) btnAddRepType.onclick=()=>repTypeList.appendChild(mkRow1(""));
+    if(btnAddRepStatus && repStatusList) btnAddRepStatus.onclick=()=>repStatusList.appendChild(mkRow1(""));
   }
 
   // ---- Init ----
@@ -1611,6 +2020,7 @@ const newLists={
   function init(){
     elWeek.value = state.week;
     refreshDropdowns();
+    renderReports();
     renderForecastCards();
     setupTimer();
     wire();
