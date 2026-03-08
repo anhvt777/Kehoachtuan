@@ -1,14 +1,14 @@
-Kehoachtuan Forecast Module Tap Fix v6.3.3
+Kehoachtuan Forecast Module Ultimate Fix v6.3.4
 
 Replace in repo root:
 - index.html
-- styles.css
 - app.js
+- styles.css (unchanged but included)
 
-Fix:
-- KPI rows are now <button> elements with inline onclick calling window.__fcOpen(staffId, metricKey)
-  -> eliminates issues where delegated click/touch handlers don't fire.
-- Badge Xem/Giao is also a <button> with inline onclick.
+Fix strategy:
+1) Define window.__fcOpen / window.__fcBadge next to openForecastModal (not dependent on init string matching).
+2) Add fallback capture listeners (pointerdown + touchstart) to open the modal even if inline onclick doesn't fire.
+3) Add clear alerts if fcBackdrop modal is missing or other runtime errors occur.
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.3.3
+https://anhvt777.github.io/Kehoachtuan/?v=6.3.4&ts=1

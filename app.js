@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.3.3 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.3.4 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -480,6 +480,42 @@
     } else {
       fcHint.innerHTML = "CB chỉ cần nhập <b>KH Tuần</b>. QL nhập/Import <b>Đã TH</b> &amp; <b>KH Quý</b>.";
     }
+
+  // Expose forecast module openers reliably (for inline onclick)
+  // These are set here (near openForecastModal) so they exist even if init() changes.
+  window.__fcOpen = (staffId, metricKey) => {
+    try{
+      // Basic sanity checks to help debug production issues
+      if(!document.getElementById("fcBackdrop")){
+        alert("Thiếu modal forecast (#fcBackdrop). Hãy chắc chắn bạn đã replace index.html đúng phiên bản.");
+        return;
+      }
+      openForecastModal(staffId, metricKey);
+    }catch(e){
+      console.error(e);
+      alert("Không mở được module nhập số: " + (e && e.message ? e.message : e));
+    }
+  };
+
+  window.__fcBadge = (staffId) => {
+    try{
+      if(!isManager(state.meId)) return;
+      const ok = confirm("Chọn OK để GIAO VIỆC cho cán bộ này.\nChọn Cancel để XEM số liệu của cán bộ này.");
+      if(ok){
+        setView("tasks");
+        openTask(null);
+        if(fmOwner) fmOwner.value = staffId;
+      }else{
+        state.fcStaff = staffId;
+        if(fcStaffFilter) fcStaffFilter.value = staffId;
+        setView("forecast");
+        renderForecastCards();
+      }
+    }catch(e){
+      console.error(e);
+      alert("Lỗi thao tác badge: " + (e && e.message ? e.message : e));
+    }
+  };
 
     updateFcModalChips(meta.kind);
 
@@ -1552,6 +1588,21 @@ if(field==="actual") row.actual = numOrNull(el.value);
     refreshDropdowns();
     setupTimer();
     wire();
+
+    // Fallback: capture pointer/touch events for KPI rows (in case inline onclick is blocked)
+    const fcCaptureOpen = (e) => {
+      const t = e.target && e.target.nodeType===3 ? e.target.parentElement : e.target;
+      if(!t || !t.closest) return;
+      const row = t.closest("[data-fc-staff][data-fc-metric]");
+      if(row){
+        const staffId = row.getAttribute("data-fc-staff");
+        const metricKey = row.getAttribute("data-fc-metric");
+        if(staffId && metricKey) window.__fcOpen(staffId, metricKey);
+      }
+    };
+    document.addEventListener("pointerdown", fcCaptureOpen, true);
+    document.addEventListener("touchstart", fcCaptureOpen, {capture:true, passive:true});
+
     syncAll();
   }
 
