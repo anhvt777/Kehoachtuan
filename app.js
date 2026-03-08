@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.4.4";
+  const VERSION = "6.4.6";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -1843,7 +1843,23 @@ const newLists={
     if(state.view==="reports" && typeof renderReports==="function") renderReports();
     }
 
-  // ---- Event wiring ----
+  
+  // ---- Add button shim (fix ReferenceError: safeOpenAdd is not defined) ----
+  // Some previous builds had scope issues; keep this shim in the same scope as wire().
+  function safeOpenAdd(){
+    try{
+      if(state.view==="reports"){
+        if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
+        return openReport(null);
+      }
+      return openTask(null);
+    }catch(err){
+      console.error(err);
+      alert("Lỗi mở form: " + (err?.message || err));
+    }
+  }
+
+// ---- Event wiring ----
   function wire(){
     tabTasks.onclick=()=>setView("tasks");
     tabForecast.onclick=()=>setView("forecast");

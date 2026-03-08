@@ -1,14 +1,13 @@
-Kehoachtuan v6.4.5 - Reports topbar Add button fix
+Kehoachtuan v6.4.6
 
 Fix:
-- Top bar '+ Thêm việc' becomes '+ Thêm báo cáo' in Báo cáo tab
-- Clicking top bar Add opens Report modal when in Báo cáo tab, otherwise Task modal
-- Non-manager cannot add reports (button disabled + alert)
+- Add top-level safeOpenAdd() shim in same scope as wire() to prevent 'safeOpenAdd is not defined'
+- Keeps contextual behavior: in Reports view opens Report modal, otherwise opens Task modal.
 
-Replace:
+Replace in repo root:
 - index.html
 - styles.css
 - app.js
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.4.5&ts=1
+https://anhvt777.github.io/Kehoachtuan/?v=6.4.6&ts=1
