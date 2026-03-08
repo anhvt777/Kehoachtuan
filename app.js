@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.1.8 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.1.9 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -235,6 +235,19 @@
       o.value=""; o.textContent=emptyLabel;
       el.appendChild(o);
     }
+
+  // Fill dropdown options inside Task modal (call ONLY when opening the modal)
+  function fillTaskModalOptions(){
+    const L=getLists();
+    fillSelect(fmOwner, L.staff || [], {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
+    fillSelect(fmGroup, L.groups || [], {emptyLabel:"-- Chọn --"});
+    fillSelect(fmStatus, L.statuses || [], {emptyLabel:"-- Chọn --"});
+    fillSelect(fmPriority, L.priorities || [], {emptyLabel:"-- Chọn --"});
+    fillSelect(fmCarry, ["Y","N"], {emptyLabel:"-- Chọn --"});
+    fillSelect(fmKpi, L.kpis || [], {emptyLabel:"-- (tuỳ chọn) --"});
+    fillSelect(fmMetric, L.outputMetrics || [], {emptyLabel:"-- (tuỳ chọn) --"});
+  }
+
     for(const it of items){
       const o=document.createElement("option");
       o.value=valueKey ? String(it[valueKey]??"") : String(it??"");
@@ -244,6 +257,9 @@
   }
 
   function refreshDropdowns(){
+    // IMPORTANT: do not rebuild dropdowns while a modal is open (prevents reset while typing)
+    if(document.body.classList.contains("modal-open")) return;
+
     const L=getLists();
     const staff=L.staff||[];
     fillSelect(elMe, staff, {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
@@ -652,6 +668,10 @@
   async function syncAll(){
     if(state.syncing) return;
     state.syncing=true;
+    if(document.body.classList.contains("modal-open")){
+      // defer sync rendering until user finishes editing
+    }
+
     try{
       const s=getSettings();
       if(s.storageMode==="supabase"){
@@ -663,7 +683,7 @@
         state.forecast = loadJSON(KEY_FC_LOCAL) || state.forecast || {};
         mark(true, "local • loaded");
       }
-      render();
+      if(!document.body.classList.contains("modal-open")) render();
     }catch(e){
       console.error(e);
       mark(false, "đồng bộ lỗi");
@@ -675,14 +695,20 @@
   function setupTimer(){
     if(state.timer) clearInterval(state.timer);
     const sec=getSettings().syncSeconds;
-    state.timer=setInterval(()=>{ if(!document.hidden) syncAll(); }, sec*1000);
-  }
+    state.timer=setInterval(()=>{
+      if(document.hidden) return;
+      if(document.body.classList.contains("modal-open")) return; // avoid resetting fields while editing
+      syncAll();
+    }, sec*1000);
+}
 
   // ---- Task modal ----
   function nextSeq(){ return state.tasks.reduce((m,t)=>Math.max(m, Number(t.seq||0)),0)+1; }
   function newId(){ return `t_${Math.random().toString(36).slice(2,10)}_${Date.now()}`; }
 
   function openTask(task){
+    fillTaskModalOptions();
+
     const L=getLists();
     if(task){
       taskTitle.textContent="Sửa công việc";
@@ -1145,7 +1171,7 @@
       state.meId = elMe.value;
       // default forecast filter to self for non-managers
       if(!isManager(state.meId)) state.fcStaff = state.meId;
-      render();
+      if(!document.body.classList.contains("modal-open")) render();
     };
 
     filterAssignee.onchange=()=>{ state.filterAssignee=filterAssignee.value; renderTasks(); };
