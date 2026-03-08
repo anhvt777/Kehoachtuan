@@ -1,9 +1,43 @@
-/* Kehoachtuan v6.3.4 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.3.5 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
 (() => {
   "use strict";
+
+  // IMPORTANT: define global handlers early so inline onclick never fails
+  // (prevents: window.__fcOpen is not a function)
+  window.__fcOpen = (staffId, metricKey) => {
+    try{
+      if(typeof openForecastModal !== "function"){
+        alert("App chưa sẵn sàng. Hãy tải lại trang (hard refresh).");
+        return;
+      }
+      openForecastModal(staffId, metricKey);
+    }catch(e){
+      console.error(e);
+      alert("Không mở được module nhập số: " + (e && e.message ? e.message : e));
+    }
+  };
+
+  window.__fcBadge = (staffId) => {
+    try{
+      if(typeof isManager !== "function" || !isManager(state.meId)) return;
+      const ok = confirm("Chọn OK để GIAO VIỆC cho cán bộ này.\nChọn Cancel để XEM số liệu của cán bộ này.");
+      if(ok){
+        setView("tasks");
+        openTask(null);
+        if(fmOwner) fmOwner.value = staffId;
+      }else{
+        state.fcStaff = staffId;
+        if(fcStaffFilter) fcStaffFilter.value = staffId;
+        setView("forecast");
+        renderForecastCards();
+      }
+    }catch(e){
+      console.error(e);
+    }
+  };
   const CFG = window.CONFIG || {};
   const VERSION = "6.3.1";
 
