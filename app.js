@@ -3,6 +3,9 @@
    - Excel export matches Du kien tuan.xlsx layout
 */
 (() => {
+  // fallback to avoid freeze if partial deploy
+  window.renderReports = window.renderReports || function(){};
+
   "use strict";
 
   // IMPORTANT: define global handlers early so inline onclick never fails
@@ -39,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.4.3";
+  const VERSION = "6.4.4";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -788,6 +791,9 @@
       </tr>`;
     }).join("");
   }
+  // expose for debugging
+  window.renderReports = renderReports;
+
 
     // Staff cards
     for(const s of visibleStaff){
@@ -1367,7 +1373,7 @@ const newLists={
     };
     saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
-    renderReports();
+    if(typeof renderReports==="function") renderReports();
     renderForecastCards();
     setupAutoCompactTopbar();
     // Expose handlers for inline onclick (iPhone reliability)
@@ -1809,8 +1815,8 @@ const newLists={
     renderReports();
     if(state.view==="tasks") renderTasks();
     if(state.view==="forecast") renderForecastCards();
-    if(state.view==="reports") renderReports();
-  }
+    if(state.view==="reports" && typeof renderReports==="function") renderReports();
+    }
 
   // ---- Event wiring ----
   function wire(){
