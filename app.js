@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.1.6 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.1.7 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -341,23 +341,46 @@
 
     const cards=[];
 
-    // Manager total card
+    // Manager total card (summary chips only)
     if(meIsMgr && !state.fcStaff){
-      const rowsHtml = metrics.map(m=>{
+      const blocks = metrics.map(m=>{
         const sums = sumMetric(m.key);
         const a=sums.A, w=sums.W, q=sums.Q;
         const delta = (m.kind==="5col" && a!==null && w!==null) ? (w-a) : null;
         const gap = (a!==null && q!==null) ? (a-q) : null;
+
         const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
         const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
-        return `<tr>
-          <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
-          <td class="fcNum">${a===null?"":fmtNum(a)}</td>
-          <td class="fcNum">${w===null?"":fmtNum(w)}</td>
-          <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
-          <td class="fcNum">${q===null?"":fmtNum(q)}</td>
-          <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
-        </tr>`;
+
+        return `<div class="fcMetricBlock open">
+          <button type="button" class="fcMetricHead" data-fc-toggle="1">
+            <div class="fcMetricHeadLeft">
+              <div class="fcMetricName">${escapeHtml(m.name)}</div>
+              ${m.unit?`<div class="fcMetricUnit">${escapeHtml(m.unit)}</div>`:""}
+            </div>
+            <div class="fcMetricChips">
+              <span class="fcChip">Đã TH: ${a===null?"":fmtNum(a)}</span>
+              <span class="fcChip">KH Tuần: ${w===null?"":fmtNum(w)}</span>
+              ${m.kind==="5col" ? `<span class="fcChip ${dCls}">Δ: ${delta===null?"":fmtNum(delta)}</span>` : ``}
+              <span class="fcChip">KH Quý: ${q===null?"":fmtNum(q)}</span>
+              <span class="fcChip ${gCls}">GAP: ${gap===null?"":fmtNum(gap)}</span>
+              <span class="fcChev">▾</span>
+            </div>
+          </button>
+          <div class="fcMetricBody">
+            <div class="fcFieldGrid">
+              <div class="fcField"><label>Đã TH</label><input type="number" value="${a===null?"":a}" readonly></div>
+              <div class="fcField"><label>KH Tuần</label><input type="number" value="${w===null?"":w}" readonly></div>
+              <div class="fcField"><label>KH Quý</label><input type="number" value="${q===null?"":q}" readonly></div>
+              <div class="fcField"><label>Kết quả</label>
+                <div class="fcMetricChips" style="justify-content:flex-start">
+                  ${m.kind==="5col" ? `<span class="fcChip ${dCls}">Δ: ${delta===null?"":fmtNum(delta)}</span>` : ``}
+                  <span class="fcChip ${gCls}">GAP: ${gap===null?"":fmtNum(gap)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
       }).join("");
 
       cards.push(`<div class="fcCard">
@@ -368,55 +391,82 @@
           </div>
           <div class="fcBadge">Quản lý</div>
         </div>
-        <table class="fcMini">
-          <thead><tr>
-            <th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th>
-          </tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
+        ${blocks}
       </div>`);
     }
 
     // Staff cards
     for(const s of visibleStaff){
-      const rowsHtml = metrics.map(m=>{
+      const badge = (String(state.meId)===String(s.id)) ? "Tôi" : (meIsMgr ? "Xem/Giao" : "CB");
+      const canEditWeekSelf = (String(state.meId)===String(s.id)) || meIsMgr;
+
+      const blocks = metrics.map((m, idx)=>{
         const row=getFcRow(state.week, s.id, m.key);
         const {a,w,q,delta,gap} = computeDeltaGap(row, m.kind);
+
         const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
         const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
 
-        const canEditWeek = (String(state.meId)===String(s.id)) || meIsMgr;
-        const roWeek = !canEditWeek;
+        const roWeek = !canEditWeekSelf;
         const roAdmin = !allowAdmin;
 
-        return `<tr>
-          <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
-          <td><input data-fc="1" data-field="actual" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
-                type="number" step="any" value="${a===null?"":a}" ${roAdmin?"readonly":""}></td>
-          <td><input data-fc="1" data-field="weekPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
-                type="number" step="any" value="${w===null?"":w}" ${roWeek?"readonly":""}></td>
-          <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
-          <td><input data-fc="1" data-field="quarterPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
-                type="number" step="any" value="${q===null?"":q}" ${roAdmin?"readonly":""}></td>
-          <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
-        </tr>`;
+        // Default: collapse all blocks except the first one on mobile to reduce clutter
+        const open = (idx===0);
+
+        return `<div class="fcMetricBlock ${open?"open":""}">
+          <button type="button" class="fcMetricHead" data-fc-toggle="1">
+            <div class="fcMetricHeadLeft">
+              <div class="fcMetricName">${escapeHtml(m.name)}</div>
+              ${m.unit?`<div class="fcMetricUnit">${escapeHtml(m.unit)}</div>`:""}
+            </div>
+            <div class="fcMetricChips">
+              <span class="fcChip">KH Tuần: ${w===null?"":fmtNum(w)}</span>
+              ${m.kind==="5col" ? `<span class="fcChip ${dCls}">Δ: ${delta===null?"":fmtNum(delta)}</span>` : ``}
+              <span class="fcChip ${gCls}">GAP: ${gap===null?"":fmtNum(gap)}</span>
+              <span class="fcChev">▾</span>
+            </div>
+          </button>
+          <div class="fcMetricBody">
+            <div class="fcFieldGrid">
+              <div class="fcField">
+                <label>Đã TH ${roAdmin? "(quản lý)":""}</label>
+                <input data-fc="1" data-field="actual" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                       type="number" step="any" inputmode="decimal" value="${a===null?"":a}" ${roAdmin?"readonly":""}>
+              </div>
+              <div class="fcField">
+                <label>KH Tuần (cán bộ nhập)</label>
+                <input data-fc="1" data-field="weekPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                       type="number" step="any" inputmode="decimal" value="${w===null?"":w}" ${roWeek?"readonly":""}>
+              </div>
+              <div class="fcField">
+                <label>KH Quý ${roAdmin? "(quản lý)":""}</label>
+                <input data-fc="1" data-field="quarterPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                       type="number" step="any" inputmode="decimal" value="${q===null?"":q}" ${roAdmin?"readonly":""}>
+              </div>
+              <div class="fcField">
+                <label>Kết quả</label>
+                <div class="fcMetricChips" style="justify-content:flex-start">
+                  ${m.kind==="5col" ? `<span class="fcChip ${dCls}">Δ (KH Tuần - Đã TH): ${delta===null?"":fmtNum(delta)}</span>` : ``}
+                  <span class="fcChip ${gCls}">GAP (Đã TH - KH Quý): ${gap===null?"":fmtNum(gap)}</span>
+                </div>
+              </div>
+            </div>
+            <div class="fcEditableHint">
+              Mẹo: Chỉ cần nhập <b>KH Tuần</b>. Quản lý nhập/Import <b>Đã TH</b> &amp; <b>KH Quý</b>.
+            </div>
+          </div>
+        </div>`;
       }).join("");
 
-      const badge = (String(state.meId)===String(s.id)) ? "Tôi" : (meIsMgr ? "Xem/Giao" : "CB");
       cards.push(`<div class="fcCard">
         <div class="fcCardHead">
           <div>
             <div class="fcTitle">${escapeHtml(s.id)} - ${escapeHtml(s.name)}</div>
-            <div class="fcSubtitle">Nhập KH Tuần • Delta/GAP tự tính</div>
+            <div class="fcSubtitle">Chạm vào từng chỉ tiêu để nhập số (accordion)</div>
           </div>
           <div class="fcBadge">${escapeHtml(badge)}</div>
         </div>
-        <table class="fcMini">
-          <thead><tr>
-            <th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th>
-          </tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
+        ${blocks}
       </div>`);
     }
 
@@ -1175,7 +1225,17 @@
       scheduleSaveFc(staffId, metricKey);
       // live recompute
       renderForecastCards();
+    
+    // Forecast accordion toggle (tap header to expand/collapse)
+    fcCards.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-fc-toggle]");
+      if(!btn) return;
+      const block = btn.closest(".fcMetricBlock");
+      if(!block) return;
+      block.classList.toggle("open");
     });
+
+  });
   }
 
   // ---- Init ----

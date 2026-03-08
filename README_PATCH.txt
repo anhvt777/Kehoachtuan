@@ -1,4 +1,4 @@
-Kehoachtuan Mobile UX Patch v6.1.6
+Kehoachtuan Forecast Mobile UX Patch v6.1.7
 
 Replace in repo root:
 - index.html
@@ -6,11 +6,9 @@ Replace in repo root:
 - app.js
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.1.6
+https://anhvt777.github.io/Kehoachtuan/?v=6.1.7
 
-Fixes:
-1) Sticky bar no longer covers Add Task / Danh muc:
-   - When any modal opens, body gets class 'modal-open' and CSS hides .topbar.
-2) Auto-compact sticky bar while scrolling:
-   - On mobile (<=720px), when scrollY > 60, .topbar becomes 'compact' and hides title + selectors + sync row.
-   - Keeps only action buttons + tabs to maximize content area.
+What changed:
+- Forecast tab now uses accordion blocks per KPI metric (much easier on mobile portrait).
+- Each metric shows chips (KH Tuần, Δ, GAP) for quick scan; tap to expand inputs.
+- Default only first metric expanded to reduce clutter.
