@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.3.5 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.3.6 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -1460,19 +1460,22 @@ function safeOpenTask(task){
     btnAddMetric.onclick=()=>metricList.appendChild(mkRow1(""));
     btnListsSave.onclick=()=>{ saveLists(); closeModals(); };
 
-    // Forecast
+    // Forecast (filters / admin / import)
     fcStaffFilter.onchange=()=>{ state.fcStaff = fcStaffFilter.value; renderForecastCards(); };
     fcMetricFilter.onchange=()=>{ state.fcMetric = fcMetricFilter.value; renderForecastCards(); };
+
     btnFcToggle.onclick=()=>{
       if(!isManager(state.meId)) return alert("Chỉ quản lý mới bật sửa Thực hiện/KH Quý.");
       state.fcEditAdmin = !state.fcEditAdmin;
       btnFcToggle.textContent = state.fcEditAdmin ? "Tắt sửa Thực hiện/KH Quý" : "Bật sửa Thực hiện/KH Quý";
       renderForecastCards();
     };
+
     btnFcImport.onclick=()=>{
       if(!isManager(state.meId)) return alert("Chỉ quản lý mới import số liệu.");
       fcImportFile.value=""; fcImportFile.click();
     };
+
     fcImportFile.onchange=async()=>{
       const f=fcImportFile.files && fcImportFile.files[0];
       if(!f) return;
@@ -1486,115 +1489,42 @@ function safeOpenTask(task){
       }
     };
 
-    // Forecast input handler (event delegation)
-    fcCards.addEventListener("input",(e)=>{
-      const el=e.target;
-      if(!(el instanceof HTMLInputElement)) return;
-      if(el.dataset.fc!=="1") return;
-      const staffId=el.dataset.staff;
-      const metricKey=el.dataset.metric;
-      const field=el.dataset.field;
+    // Forecast modal events (MUST prevent default submit to avoid page reload)
+    if(fcForm){
+      fcForm.addEventListener("submit",(e)=>{ e.preventDefault(); saveForecastModal(); });
+    }
+    if(fcClose) fcClose.onclick=closeModals;
+    if(fcCancel) fcCancel.onclick=closeModals;
+    if(fcBackdrop) fcBackdrop.onclick=(e)=>{ if(e.target===fcBackdrop) closeModals(); };
 
-      const row=getFcRow(state.week, staffId, metricKey);
-      
-    // Forecast: click badge "Xem/Giao" (manager) -> choose view or assign
+    // Update chips live while typing
+    [fcActual, fcWeekPlan, fcQuarterPlan].forEach(inp=>{
+      if(!inp) return;
+      inp.addEventListener("input", ()=>{
+        const meta=metricMetaByKey(fcMetricKey.value);
+        updateFcModalChips(meta.kind);
+      });
+    });
+
+    // Forecast: delegated open (fallback) for KPI rows and badges
     fcCards.addEventListener("click",(e)=>{
-      // Prevent duplicate open after touch
-      if(Date.now() - (state._lastTouch||0) < 450) return;
+      const t = e.target && e.target.nodeType===3 ? e.target.parentElement : e.target;
+      if(!t || !t.closest) return;
 
-      // Tap KPI row -> open module modal
-      const rowTap = e.target.closest && e.target.closest("[data-fc-staff]");
-      if(rowTap){
-        const staffId = rowTap.getAttribute("data-fc-staff");
-        const metricKey = rowTap.getAttribute("data-fc-metric");
-        if(staffId && metricKey){
-          try{ openForecastModal(staffId, metricKey); }catch(err){ console.error(err); alert("Không mở được module nhập số: " + err.message); }
-        }
+      const row = t.closest("[data-fc-staff][data-fc-metric]");
+      if(row){
+        const staffId=row.getAttribute("data-fc-staff");
+        const metricKey=row.getAttribute("data-fc-metric");
+        if(staffId && metricKey) window.__fcOpen(staffId, metricKey);
         return;
       }
 
-      // Accordion toggle
-      const tog = e.target.closest("[data-fc-toggle='1']");
-      if(tog){
-        const block = tog.closest(".fcMetricBlock");
-        if(block) block.classList.toggle("open");
-        return;
-      }
-
-      const badge = e.target.closest("[data-fc-action='pick']");
-      if(!badge) return;
-      const staffId = badge.getAttribute("data-staff");
-      if(!staffId) return;
-
-      // Simple action sheet via confirm:
-      // OK = Giao việc, Cancel = Xem số liệu của cán bộ
-      const ok = confirm("Chọn thao tác cho " + staffId + "\nOK = Giao việc\nCancel = Xem số liệu");
-      if(ok){
-        // Prefill owner then open Add Task
-        state.prefillOwner = staffId;
-        setView("tasks");
-        safeOpenTask(null);
-      }else{
-        // Filter forecast to that staff
-        state.fcStaff = staffId;
-        fcStaffFilter.value = staffId;
-        setView("forecast");
-        renderForecastCards();
-        window.scrollTo({top:0, behavior:"smooth"});
+      const badge = t.closest("[data-fc-badge]");
+      if(badge){
+        const staffId=badge.getAttribute("data-staff");
+        if(staffId) window.__fcBadge(staffId);
       }
     });
-
-    // iPhone: use touchend to open modal immediately (avoid delayed click)
-    fcCards.addEventListener("touchend",(e)=>{
-      state._lastTouch = Date.now();
-      let t = e.target;
-      if(t && t.nodeType===3) t = t.parentElement;
-      const rowTap = t && t.closest ? t.closest("[data-fc-staff]") : null;
-      if(rowTap){
-        const staffId = rowTap.getAttribute("data-fc-staff");
-        const metricKey = rowTap.getAttribute("data-fc-metric");
-        if(staffId && metricKey){
-          try{ openForecastModal(staffId, metricKey); }catch(err){ console.error(err); alert("Không mở được module nhập số: " + err.message); }
-        }
-      }
-    }, {passive:true});
-
-if(field==="actual") row.actual = numOrNull(el.value);
-      if(field==="weekPlan") row.weekPlan = numOrNull(el.value);
-      if(field==="quarterPlan") row.quarterPlan = numOrNull(el.value);
-      setFcRow(row);
-
-      scheduleSaveFc(staffId, metricKey);
-      // live recompute
-      renderForecastCards();
-    });
-    // Forecast badge: "Xem/Giao" (manager)
-    document.addEventListener("click", (e) => {
-      const badge = e.target.closest(".fcBadge");
-      if(!badge) return;
-      if(String(badge.textContent||"").trim() !== "Xem/Giao") return;
-      if(!isManager(state.meId)) return;
-
-      const card = badge.closest(".fcCard");
-      const titleEl = card ? card.querySelector(".fcTitle") : null;
-      const title = titleEl ? titleEl.textContent.trim() : "";
-      const mm = /(\d{6,})\s*-\s*/.exec(title);
-      if(!mm) return;
-      const staffId = mm[1];
-
-      // OK = assign task, Cancel = filter view
-      const ok = confirm("OK: Giao việc cho " + title + "\\nCancel: Chỉ xem số liệu của cán bộ này");
-      if(ok){
-        // switch to Tasks tab and prefill assignee
-        state.prefillOwnerId = staffId;
-        setView("tasks");
-        safeOpenTask(null);
-      }else{
-        state.fcStaff = staffId;
-        if(typeof fcStaffFilter !== "undefined" && fcStaffFilter) fcStaffFilter.value = staffId;
-        renderForecastCards();
-      }
-    }, true);
 
   }
 
@@ -1622,20 +1552,6 @@ if(field==="actual") row.actual = numOrNull(el.value);
     refreshDropdowns();
     setupTimer();
     wire();
-
-    // Fallback: capture pointer/touch events for KPI rows (in case inline onclick is blocked)
-    const fcCaptureOpen = (e) => {
-      const t = e.target && e.target.nodeType===3 ? e.target.parentElement : e.target;
-      if(!t || !t.closest) return;
-      const row = t.closest("[data-fc-staff][data-fc-metric]");
-      if(row){
-        const staffId = row.getAttribute("data-fc-staff");
-        const metricKey = row.getAttribute("data-fc-metric");
-        if(staffId && metricKey) window.__fcOpen(staffId, metricKey);
-      }
-    };
-    document.addEventListener("pointerdown", fcCaptureOpen, true);
-    document.addEventListener("touchstart", fcCaptureOpen, {capture:true, passive:true});
 
     syncAll();
   }

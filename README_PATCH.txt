@@ -1,16 +1,15 @@
-Kehoachtuan Global Handler Fix v6.3.5
+Kehoachtuan Forecast Modal Save/Close Fix v6.3.6
 
 Replace in repo root:
 - index.html
 - app.js
 - styles.css
 
-Fix:
-- Define window.__fcOpen and window.__fcBadge immediately after 'use strict' (top of app.js),
-  so inline onclick always finds a function (prevents 'window.__fcOpen is not a function').
+Fixes:
+- Prevent page reload on forecast modal Save (bind fcForm submit -> preventDefault -> saveForecastModal()).
+- Enable closing forecast modal (X / Đóng / click backdrop).
+- Remove overly aggressive global capture listeners that caused unexpected modal opens.
+- Replace corrupted forecast event wiring with a clean, stable block.
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.3.5&ts=1
-
-After load, in Console you should see:
-typeof window.__fcOpen === 'function'
+https://anhvt777.github.io/Kehoachtuan/?v=6.3.6&ts=1
