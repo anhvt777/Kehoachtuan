@@ -1,9 +1,10 @@
-Kehoachtuan v6.4.7
+Kehoachtuan v6.4.8 - Fix Report Types dropdown
 
 Fix:
-- In Reports tab, Add button is no longer disabled; click shows clear alert if not selected/manager.
-- render() no longer calls renderReports() outside Reports view.
-- Tooltip on Add button guides user to select 'Tôi là' = Võ Tuấn Anh.
+- getLists() now includes reportTypes & reportStatuses (saved in KEY_LISTS).
+- Danh mục modal now renders & saves reportTypes/reportStatuses (repTypeList/repStatusList).
+- Report modal uses robust string-based select population for Loại báo cáo and Trạng thái.
+- Node syntax check passed.
 
 Replace in repo root:
 - index.html
@@ -11,4 +12,8 @@ Replace in repo root:
 - app.js
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.4.7&ts=1
+https://anhvt777.github.io/Kehoachtuan/?v=6.4.8&ts=1
+
+How to set report types:
+Danh mục -> Danh mục khác -> Loại báo cáo -> + Thêm -> Lưu danh mục
+Then open Báo cáo -> + Thêm báo cáo, dropdown should show items.

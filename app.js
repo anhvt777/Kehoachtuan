@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.4.7";
+  const VERSION = "6.4.8";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -193,6 +193,8 @@
       kpis: nonEmptyArr(saved.kpis) ? saved.kpis : (CFG.kpis||[]),
       outputMetrics: nonEmptyArr(saved.outputMetrics) ? saved.outputMetrics : (CFG.outputMetrics||[]),
       forecastMetrics: nonEmptyArr(saved.forecastMetrics) ? saved.forecastMetrics : (CFG.forecastMetrics||[]),
+      reportTypes: nonEmptyArr(saved.reportTypes) ? saved.reportTypes : (CFG.reportTypes||["Báo cáo tuần","Báo cáo tháng","Báo cáo đột xuất","Điều hành"]),
+      reportStatuses: nonEmptyArr(saved.reportStatuses) ? saved.reportStatuses : (CFG.reportStatuses||["Chưa bắt đầu","Đang thực hiện","Chờ phối hợp","Hoàn thành"]),
     };
   }
 
@@ -1653,9 +1655,22 @@ const newLists={
 
   function fillReportModalSelects(){
     const L=getLists();
-    fillSelect(repType, L.reportTypes||[], {emptyLabel:"-- Chọn --"});
+    // Loại báo cáo (string list)
+    repType.innerHTML="";
+    const ph1=document.createElement("option"); ph1.value=""; ph1.textContent="-- Chọn --"; repType.appendChild(ph1);
+    (L.reportTypes||[]).forEach(t=>{
+      const o=document.createElement("option"); o.value=String(t); o.textContent=String(t); repType.appendChild(o);
+    });
+
+    // CB đầu mối
     fillSelect(repLead, (L.staff||[]).filter(s=>String(s.id)!=="54000600"), {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
-    fillSelect(repStatus, L.reportStatuses||[], {emptyLabel:"-- Chọn --"});
+
+    // Trạng thái (đầu mối)
+    repStatus.innerHTML="";
+    const ph2=document.createElement("option"); ph2.value=""; ph2.textContent="-- Chọn --"; repStatus.appendChild(ph2);
+    (L.reportStatuses||[]).forEach(s=>{
+      const o=document.createElement("option"); o.value=String(s); o.textContent=String(s); repStatus.appendChild(o);
+    });
   }
 
   function buildCollabPick(selected){
