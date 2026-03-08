@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.2.0 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.2.1 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -708,7 +708,28 @@
   function nextSeq(){ return state.tasks.reduce((m,t)=>Math.max(m, Number(t.seq||0)),0)+1; }
   function newId(){ return `t_${Math.random().toString(36).slice(2,10)}_${Date.now()}`; }
 
-  function safeOpenTask(task){
+  
+  // Defensive: ensure fillTaskModalOptions exists (avoid runtime ReferenceError)
+  function fillTaskModalOptions(){
+    try{
+      const L=getLists();
+      if(typeof fillSelect!=="function") return;
+      if(typeof fmOwner==="undefined") return;
+      fillSelect(fmOwner, L.staff || [], {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
+      fillSelect(fmGroup, L.groups || [], {emptyLabel:"-- Chọn --"});
+      fillSelect(fmStatus, L.statuses || [], {emptyLabel:"-- Chọn --"});
+      fillSelect(fmPriority, L.priorities || [], {emptyLabel:"-- Chọn --"});
+      fillSelect(fmCarry, ["Y","N"], {emptyLabel:"-- Chọn --"});
+      fillSelect(fmKpi, L.kpis || [], {emptyLabel:"-- (tuỳ chọn) --"});
+      fillSelect(fmMetric, L.outputMetrics || [], {emptyLabel:"-- (tuỳ chọn) --"});
+    }catch(e){
+      console.warn("fillTaskModalOptions error", e);
+    }
+  }
+
+  // Prefill assignee when manager assigns from Forecast
+  state.prefillOwnerId = "";
+function safeOpenTask(task){
     try{
       openTask(task);
     }catch(err){
@@ -755,6 +776,7 @@
     }
     applyTaskFormPermissions(task);
     openModal(taskBackdrop);
+    state.prefillOwnerId = "";
   }
 
   async function saveTask(e){
@@ -1307,6 +1329,34 @@ if(field==="actual") row.actual = numOrNull(el.value);
       // live recompute
       renderForecastCards();
     });
+    // Forecast badge: "Xem/Giao" (manager)
+    document.addEventListener("click", (e) => {
+      const badge = e.target.closest(".fcBadge");
+      if(!badge) return;
+      if(String(badge.textContent||"").trim() !== "Xem/Giao") return;
+      if(!isManager(state.meId)) return;
+
+      const card = badge.closest(".fcCard");
+      const titleEl = card ? card.querySelector(".fcTitle") : null;
+      const title = titleEl ? titleEl.textContent.trim() : "";
+      const mm = /(\d{6,})\s*-\s*/.exec(title);
+      if(!mm) return;
+      const staffId = mm[1];
+
+      // OK = assign task, Cancel = filter view
+      const ok = confirm("OK: Giao việc cho " + title + "\\nCancel: Chỉ xem số liệu của cán bộ này");
+      if(ok){
+        // switch to Tasks tab and prefill assignee
+        state.prefillOwnerId = staffId;
+        setView("tasks");
+        safeOpenTask(null);
+      }else{
+        state.fcStaff = staffId;
+        if(typeof fcStaffFilter !== "undefined" && fcStaffFilter) fcStaffFilter.value = staffId;
+        renderForecastCards();
+      }
+    }, true);
+
   }
 
   // ---- Init ----
