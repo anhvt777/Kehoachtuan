@@ -1,4 +1,4 @@
-Kehoachtuan ReportsTab Fix Types v6.4.2
+Kehoachtuan v6.4.3 - Fix syntax error
 
 Replace in repo root:
 - index.html
@@ -6,9 +6,8 @@ Replace in repo root:
 - app.js
 
 Fix:
-- fillSelect() was incomplete -> report type dropdown was empty. Now fixed and supports arrays of strings/objects.
-- closeModals now closes Report modal too.
-- Ensure Danh mục saves and loads reportTypes/reportStatuses.
+- Remove stray injected code block that caused 'missing ) in parenthetical' / 'Unexpected token function'
+- Bump VERSION + cache-busting URLs
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.4.2&ts=1
+https://anhvt777.github.io/Kehoachtuan/?v=6.4.3&ts=1

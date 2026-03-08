@@ -39,7 +39,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.3.1";
+  const VERSION = "6.4.3";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -411,14 +411,6 @@
     fillSelect(fmCarry, ["Y","N"], {emptyLabel:"-- Chọn --"});
     fillSelect(fmKpi, L.kpis || [], {emptyLabel:"-- (tuỳ chọn) --"});
     fillSelect(fmMetric, L.outputMetrics || [], {emptyLabel:"-- (tuỳ chọn) --"});
-  }
-
-    for(const it of items){
-      const o=document.createElement("option");
-      o.value=valueKey ? String(it[valueKey]??"") : String(it??"");
-      o.textContent=labelFn ? labelFn(it) : String(it?.name ?? it);
-      el.appendChild(o);
-    }
   }
 
   function refreshDropdowns(){
