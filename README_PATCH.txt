@@ -1,18 +1,15 @@
-Kehoachtuan Forecast KPI Catalog v6.3.7
+Kehoachtuan ReportsTab Fix v6.4.1
 
 Replace in repo root:
 - index.html
 - styles.css
 - app.js
 
-New:
-- Danh mục -> Danh mục khác: added "KPI dự kiến" editor (separate from KPI of Tasks).
-  Fields:
-  - Mã KPI (readonly): stable key for data mapping
-  - Tên hiển thị
-  - Đơn vị
-  - Loại: 5 cột (có Δ) / 4 cột (không Δ)
-- Saved to lists.forecastMetrics and used by tab "Dự kiến số liệu".
+Fix:
+- Prevent site freeze if renderReports is missing (guards + noop fallback).
+- Adds console info: "Kehoachtuan loaded v6.4.1"
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.3.7&ts=1
+https://anhvt777.github.io/Kehoachtuan/?v=6.4.1&ts=1
+Then in Console check:
+typeof renderReports

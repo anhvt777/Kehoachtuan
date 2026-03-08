@@ -1,9 +1,13 @@
-/* Kehoachtuan v6.4.0 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.4.1 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
 (() => {
   "use strict";
+  console.info("Kehoachtuan loaded v6.4.1");
+  // Safety: avoid hard crash if renderReports is missing due to partial deploy/cache
+  if(typeof renderReports !== "function"){ window.renderReports = function(){ /* noop */ }; }
+
 
   // IMPORTANT: define global handlers early so inline onclick never fails
   // (prevents: window.__fcOpen is not a function)
@@ -1354,7 +1358,7 @@ const newLists={
     };
     saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
-    renderReports();
+    if(typeof renderReports==='function') renderReports();
     renderForecastCards();
     setupAutoCompactTopbar();
     // Expose handlers for inline onclick (iPhone reliability)
@@ -1793,7 +1797,7 @@ const newLists={
 
   function render(){
     refreshDropdowns();
-    renderReports();
+    if(typeof renderReports==='function') renderReports();
     if(state.view==="tasks") renderTasks();
     if(state.view==="forecast") renderForecastCards();
     if(state.view==="reports") renderReports();
@@ -2020,7 +2024,7 @@ const newLists={
   function init(){
     elWeek.value = state.week;
     refreshDropdowns();
-    renderReports();
+    if(typeof renderReports==='function') renderReports();
     renderForecastCards();
     setupTimer();
     wire();
