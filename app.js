@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.1.9 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.2.0 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -165,6 +165,7 @@
   const state={
     week: pickWeekStartISO(toISO(new Date())),
     meId:"",
+    prefillOwner:"",
     view:"tasks",
     filterAssignee:"",
     filterStatus:"",
@@ -466,13 +467,14 @@
       }).join("");
 
       const badge = (String(state.meId)===String(s.id)) ? "Tôi" : (meIsMgr ? "Xem/Giao" : "CB");
+      const badgeAttr = (meIsMgr && String(state.meId)!==String(s.id)) ? ` data-fc-action="pick" data-staff="${escapeHtml(s.id)}"` : "";
       cards.push(`<div class="fcCard">
         <div class="fcCardHead">
           <div>
             <div class="fcTitle">${escapeHtml(s.id)} - ${escapeHtml(s.name)}</div>
             <div class="fcSubtitle">Nhập KH Tuần • Delta/GAP tự tính</div>
           </div>
-          <div class="fcBadge">${escapeHtml(badge)}</div>
+          <div class="fcBadge" style="${(meIsMgr && String(state.meId)!==String(s.id))?'cursor:pointer':''}" ${badgeAttr}>${escapeHtml(badge)}</div>
         </div>
         <table class="fcMini">
           <thead><tr>
@@ -706,6 +708,15 @@
   function nextSeq(){ return state.tasks.reduce((m,t)=>Math.max(m, Number(t.seq||0)),0)+1; }
   function newId(){ return `t_${Math.random().toString(36).slice(2,10)}_${Date.now()}`; }
 
+  function safeOpenTask(task){
+    try{
+      openTask(task);
+    }catch(err){
+      console.error(err);
+      alert("Lỗi mở form: " + (err?.message || err));
+    }
+  }
+
   function openTask(task){
     fillTaskModalOptions();
 
@@ -729,7 +740,8 @@
       taskTitle.textContent="Thêm công việc";
       fmId.value="";
       fmGroup.value="";
-      fmOwner.value=state.meId||"";
+      fmOwner.value=(state.prefillOwner||state.meId||"");
+      state.prefillOwner="";
       fmTitle.value="";
       fmDeadline.value=state.week;
       fmStatus.value=(L.statuses||["Not started"])[0];
@@ -1180,9 +1192,15 @@
     filterOverdue.onchange=()=>{ state.onlyOverdue=!!filterOverdue.checked; renderTasks(); };
     btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; filterOverdue.checked=false; render(); };
 
-    btnAdd.onclick=()=>openTask(null);
+    btnAdd.onclick=()=>safeOpenTask(null);
     btnExport.onclick=()=>exportWeekly();
     btnLists.onclick=()=>openLists();
+
+    // Safety: delegate click in case header button is overlaid / re-rendered
+    document.addEventListener("click",(e)=>{
+      const add=e.target.closest("#btnAdd");
+      if(add){ e.preventDefault(); safeOpenTask(null); }
+    }, {passive:false});
 
     taskClose.onclick=closeModals;
     btnCancel.onclick=closeModals;
@@ -1206,7 +1224,7 @@
           alert("Bạn không có quyền sửa việc này.");
           return;
         }
-        openTask(t);
+        safeOpenTask(t);
       }
       if(act==="del"){ if(confirm("Xoá công việc này?")) delTask(id); }
     });
@@ -1255,7 +1273,32 @@
       const field=el.dataset.field;
 
       const row=getFcRow(state.week, staffId, metricKey);
-      if(field==="actual") row.actual = numOrNull(el.value);
+      
+    // Forecast: click badge "Xem/Giao" (manager) -> choose view or assign
+    fcCards.addEventListener("click",(e)=>{
+      const badge = e.target.closest("[data-fc-action='pick']");
+      if(!badge) return;
+      const staffId = badge.getAttribute("data-staff");
+      if(!staffId) return;
+
+      // Simple action sheet via confirm:
+      // OK = Giao việc, Cancel = Xem số liệu của cán bộ
+      const ok = confirm("Chọn thao tác cho " + staffId + "\nOK = Giao việc\nCancel = Xem số liệu");
+      if(ok){
+        // Prefill owner then open Add Task
+        state.prefillOwner = staffId;
+        setView("tasks");
+        safeOpenTask(null);
+      }else{
+        // Filter forecast to that staff
+        state.fcStaff = staffId;
+        fcStaffFilter.value = staffId;
+        setView("forecast");
+        renderForecastCards();
+        window.scrollTo({top:0, behavior:"smooth"});
+      }
+    });
+if(field==="actual") row.actual = numOrNull(el.value);
       if(field==="weekPlan") row.weekPlan = numOrNull(el.value);
       if(field==="quarterPlan") row.quarterPlan = numOrNull(el.value);
       setFcRow(row);
