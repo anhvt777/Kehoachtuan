@@ -527,7 +527,7 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
   table{min-width:0}
   thead{display:none}
 
-  tbody tr{
+  #viewTasks tbody tr{
     display:block;
     margin:10px 10px;
     border:1px solid var(--line);
@@ -535,7 +535,7 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
     overflow:hidden;
     box-shadow: 0 10px 22px rgba(10,31,26,.08);
   }
-  tbody td{
+  #viewTasks tbody td{
     display:flex;
     gap:12px;
     justify-content:space-between;
@@ -544,10 +544,10 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
     border-bottom:1px solid var(--line);
     background:#fff !important;
   }
-  tbody tr:nth-child(even) td{background:#fff !important}
-  tbody td:last-child{border-bottom:none}
+  #viewTasks tbody tr:nth-child(even) td{background:#fff !important}
+  #viewTasks tbody td:last-child{border-bottom:none}
 
-  tbody td::before{
+  #viewTasks tbody td::before{
     content: attr(data-label);
     flex:0 0 110px;
     color:var(--muted);
@@ -558,17 +558,17 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
   }
 
   /* Make "Công việc/Hoạt động" more readable */
-  tbody td[data-label="Công việc / Hoạt động"]{
+  #viewTasks tbody td[data-label="Công việc / Hoạt động"]{
     flex-direction:column;
     align-items:flex-start;
   }
-  tbody td[data-label="Công việc / Hoạt động"]::before{
+  #viewTasks tbody td[data-label="Công việc / Hoạt động"]::before{
     width:auto;flex:none;padding-top:0;
   }
-  tbody td[data-label="Công việc / Hoạt động"] > div{width:100%}
+  #viewTasks tbody td[data-label="Công việc / Hoạt động"] > div{width:100%}
 
   /* Actions row buttons */
-  tbody td[data-label="Tác vụ"]{
+  #viewTasks tbody td[data-label="Tác vụ"]{
     flex-direction:row;
     align-items:center;
     gap:10px;
@@ -579,10 +579,10 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
   }
 
   /* Overdue emphasis */
-  tbody tr.row-overdue{
+  #viewTasks tbody tr.row-overdue{
     border-color: rgba(198,40,40,.28);
   }
-  tbody tr.row-overdue td[data-label="ID"]{
+  #viewTasks tbody tr.row-overdue td[data-label="ID"]{
     border-left:6px solid var(--danger);
   }
 
@@ -596,7 +596,7 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
 @media (max-width: 420px){
   .grid4{grid-template-columns:1fr}
   .pill input,.pill select{min-width:120px}
-  tbody td::before{flex-basis:100px}
+  #viewTasks tbody td::before{flex-basis:100px}
 }
 
 
@@ -668,8 +668,91 @@ tbody tr.row-overdue-sub td{background: #FCE5E5}
 
 
 /* =========================
-   Task permission UX
-   v6.1.8
+   Forecast cards: protect internal table from mobile "task card" rules
+   v6.2.2
    ========================= */
-.btn-mini[disabled]{ opacity:.45; filter:grayscale(15%); cursor:not-allowed; }
-.btn-mini[disabled]:hover{ transform:none; }
+@media (max-width: 720px){
+  /* Restore default table layout for forecast mini-tables */
+  .fcMini thead{ display: table-header-group !important; }
+  .fcMini tbody{ display: table-row-group !important; }
+  .fcMini tr{ display: table-row !important; margin: 0 !important; border: none !important; box-shadow: none !important; }
+  .fcMini td, .fcMini th{
+    display: table-cell !important;
+    padding: 10px 8px !important;
+    border-bottom: 1px solid var(--line) !important;
+    background: transparent !important;
+    white-space: nowrap !important;
+    vertical-align: middle !important;
+  }
+  .fcMini td::before{ content: none !important; }
+  .fcMini input{ width: 96px !important; max-width: 96px !important; }
+  /* Ensure forecast cards are full width on mobile */
+  .fcCards{ grid-template-columns: 1fr !important; }
+}
+
+
+
+/* =========================
+   Forecast iPhone UX (Accordion + Metric Filter)
+   v6.3.0
+   - Mobile: show KPI blocks as accordion (tap to expand inputs)
+   - Keep desktop table view for quick scanning
+   ========================= */
+#fcMetricFilter{ min-width: 220px; }
+@media (max-width: 720px){
+  #fcMetricFilter{ width:100%; min-width:0; }
+}
+
+.fcMetricBlock{
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+  margin-top:10px;
+  background:#fff;
+}
+.fcMetricHead{
+  width:100%;
+  background:#F2F7F6;
+  border:none;
+  padding:10px 12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+  cursor:pointer;
+}
+.fcMetricHeadLeft{ min-width:0; }
+.fcMetricName{ font-weight:900; color:#123630; line-height:1.2; }
+.fcMetricUnit{ color:var(--muted); font-size:11px; margin-top:2px; }
+.fcMetricChips{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+.fcChip{ padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; font-size:12px; font-weight:800; white-space:nowrap; }
+.fcChip.neg{ border-color:rgba(198,40,40,.25); color:var(--danger); background:#FDECEC; }
+.fcChip.pos{ border-color:rgba(27,127,90,.25); color:var(--ok); background:#ECF8F2; }
+.fcChev{ font-size:16px; opacity:.7; transform-origin:center; transition:transform .15s ease; }
+.fcMetricBody{ padding:10px 12px; background:#fff; display:none; }
+.fcMetricBlock.open .fcMetricBody{ display:block; }
+.fcMetricBlock.open .fcChev{ transform: rotate(180deg); }
+
+.fcFieldGrid{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.fcField{ display:flex; flex-direction:column; gap:6px; }
+.fcField label{ font-size:12px; color:var(--muted); font-weight:800; }
+.fcField input{
+  width:100%;
+  max-width:100%;
+  padding:11px 12px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-size:15px;
+}
+.fcField input[readonly]{ background:#F6FAF9; color:#2B3A37; }
+
+.fcHint{ margin-top:8px; font-size:12px; color:var(--muted); }
+
+@media (max-width: 720px){
+  /* Mobile: hide the mini table inside forecast cards, use accordion */
+  .fcMini{ display:none !important; }
+  .fcCardHead{ margin-bottom:6px; }
+  .fcMetricHead{ padding:10px 10px; }
+  .fcChip{ padding:6px 8px; }
+}

@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.2.1 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.3.0 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -174,6 +174,7 @@
     tasks:[],
     forecast: loadJSON(KEY_FC_LOCAL) || {}, // key: week|staff|metric
     fcStaff:"",
+    fcMetric:"",
     fcEditAdmin:false,
     syncing:false,
     timer:null
@@ -204,7 +205,7 @@
   const stMode=$("#stMode"), stInterval=$("#stInterval"), stUrl=$("#stUrl"), stKey=$("#stKey");
 
   // Forecast
-  const fcStaffFilter=$("#fcStaffFilter"), btnFcImport=$("#btnFcImport"), btnFcToggle=$("#btnFcToggleEdit");
+  const fcStaffFilter=$("#fcStaffFilter"), fcMetricFilter=$("#fcMetricFilter"), btnFcImport=$("#btnFcImport"), btnFcToggle=$("#btnFcToggleEdit");
   const fcImportFile=$("#fcImportFile");
   const fcCards=$("#fcCards");
 
@@ -279,11 +280,17 @@
     // forecast staff filter (exclude ALL)
     fillSelect(fcStaffFilter, staff.filter(s=>String(s.id)!=="54000600"), {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Xem tất cả cán bộ --"});
 
+    // Forecast metric filter
+    const mOpts = [{key:"", name:"-- Tất cả chỉ tiêu --"}].concat((L.forecastMetrics||[]).map(m=>({key:m.key, name:m.name})));
+    fillSelect(fcMetricFilter, mOpts, {valueKey:"key", labelFn:m=>m.name, emptyLabel:null});
+
+
     if(state.meId) elMe.value=state.meId;
     if(state.filterAssignee) filterAssignee.value=state.filterAssignee;
     if(state.filterStatus) filterStatus.value=state.filterStatus;
     if(state.filterGroup) filterGroup.value=state.filterGroup;
     if(state.fcStaff) fcStaffFilter.value=state.fcStaff;
+    if(state.fcMetric) fcMetricFilter.value=state.fcMetric;
   }
 
   // ---- Task logic ----
@@ -394,7 +401,8 @@
   function renderForecastCards(){
     const L=getLists();
     const staffAll=L.staff.filter(s=>String(s.id)!=="54000600");
-    const metrics=L.forecastMetrics || [];
+    const metricsAll=L.forecastMetrics || [];
+    const metrics = state.fcMetric ? metricsAll.filter(x=>String(x.key)===String(state.fcMetric)) : metricsAll;
 
     const visibleStaff = state.fcStaff
       ? staffAll.filter(s=>String(s.id)===String(state.fcStaff))
@@ -403,86 +411,202 @@
     const meIsMgr=isManager(state.meId);
     const allowAdmin = state.fcEditAdmin && meIsMgr;
 
+    const isMobile = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+
     const cards=[];
 
     // Manager total card
     if(meIsMgr && !state.fcStaff){
-      const rowsHtml = metrics.map(m=>{
-        const sums = sumMetric(m.key);
-        const a=sums.A, w=sums.W, q=sums.Q;
-        const delta = (m.kind==="5col" && a!==null && w!==null) ? (w-a) : null;
-        const gap = (a!==null && q!==null) ? (a-q) : null;
-        const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
-        const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
-        return `<tr>
-          <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
-          <td class="fcNum">${a===null?"":fmtNum(a)}</td>
-          <td class="fcNum">${w===null?"":fmtNum(w)}</td>
-          <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
-          <td class="fcNum">${q===null?"":fmtNum(q)}</td>
-          <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
-        </tr>`;
-      }).join("");
+      if(isMobile){
+        // Mobile total: show accordion blocks with chips
+        const blocks = metrics.map((m, idx)=>{
+          const sums = sumMetric(m.key);
+          const a=sums.A, w=sums.W, q=sums.Q;
+          const delta = (m.kind==="5col" && a!==null && w!==null) ? (w-a) : null;
+          const gap = (a!==null && q!==null) ? (a-q) : null;
+          const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
+          const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
+          const open = idx===0;
+          return `<div class="fcMetricBlock ${open?"open":""}">
+            <button type="button" class="fcMetricHead" data-fc-toggle="1">
+              <div class="fcMetricHeadLeft">
+                <div class="fcMetricName">${escapeHtml(m.name)}</div>
+                ${m.unit?`<div class="fcMetricUnit">${escapeHtml(m.unit)}</div>`:""}
+              </div>
+              <div class="fcMetricChips">
+                <span class="fcChip">Đã TH: ${a===null?"":fmtNum(a)}</span>
+                <span class="fcChip">KH Tuần: ${w===null?"":fmtNum(w)}</span>
+                ${m.kind==="5col"?`<span class="fcChip ${dCls}">Δ: ${delta===null?"":fmtNum(delta)}</span>`:""}
+                <span class="fcChip">KH Quý: ${q===null?"":fmtNum(q)}</span>
+                <span class="fcChip ${gCls}">GAP: ${gap===null?"":fmtNum(gap)}</span>
+                <span class="fcChev">▾</span>
+              </div>
+            </button>
+            <div class="fcMetricBody">
+              <div class="fcFieldGrid">
+                <div class="fcField"><label>Đã TH</label><input type="number" value="${a===null?"":a}" readonly></div>
+                <div class="fcField"><label>KH Tuần</label><input type="number" value="${w===null?"":w}" readonly></div>
+                <div class="fcField"><label>KH Quý</label><input type="number" value="${q===null?"":q}" readonly></div>
+                <div class="fcField"><label>Kết quả</label>
+                  <div class="fcMetricChips" style="justify-content:flex-start">
+                    ${m.kind==="5col"?`<span class="fcChip ${dCls}">Δ: ${delta===null?"":fmtNum(delta)}</span>`:""}
+                    <span class="fcChip ${gCls}">GAP: ${gap===null?"":fmtNum(gap)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        }).join("");
 
-      cards.push(`<div class="fcCard">
-        <div class="fcCardHead">
-          <div>
-            <div class="fcTitle">TỔNG PHÒNG</div>
-            <div class="fcSubtitle">Tổng hợp theo tất cả cán bộ • tuần ${escapeHtml(fmtDDMMYYYY(state.week))}</div>
+        cards.push(`<div class="fcCard">
+          <div class="fcCardHead">
+            <div>
+              <div class="fcTitle">TỔNG PHÒNG</div>
+              <div class="fcSubtitle">Tổng hợp theo tất cả cán bộ • tuần ${escapeHtml(fmtDDMMYYYY(state.week))}</div>
+            </div>
+            <div class="fcBadge">Quản lý</div>
           </div>
-          <div class="fcBadge">Quản lý</div>
-        </div>
-        <table class="fcMini">
-          <thead><tr>
-            <th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th>
-          </tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>`);
+          ${blocks}
+        </div>`);
+      } else {
+        // Desktop: keep mini table
+        const rowsHtml = metrics.map(m=>{
+          const sums = sumMetric(m.key);
+          const a=sums.A, w=sums.W, q=sums.Q;
+          const delta = (m.kind==="5col" && a!==null && w!==null) ? (w-a) : null;
+          const gap = (a!==null && q!==null) ? (a-q) : null;
+          const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
+          const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
+          return `<tr>
+            <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
+            <td class="fcNum">${a===null?"":fmtNum(a)}</td>
+            <td class="fcNum">${w===null?"":fmtNum(w)}</td>
+            <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
+            <td class="fcNum">${q===null?"":fmtNum(q)}</td>
+            <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
+          </tr>`;
+        }).join("");
+        cards.push(`<div class="fcCard">
+          <div class="fcCardHead">
+            <div>
+              <div class="fcTitle">TỔNG PHÒNG</div>
+              <div class="fcSubtitle">Tổng hợp theo tất cả cán bộ • tuần ${escapeHtml(fmtDDMMYYYY(state.week))}</div>
+            </div>
+            <div class="fcBadge">Quản lý</div>
+          </div>
+          <table class="fcMini">
+            <thead><tr><th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>`);
+      }
     }
 
     // Staff cards
     for(const s of visibleStaff){
-      const rowsHtml = metrics.map(m=>{
-        const row=getFcRow(state.week, s.id, m.key);
-        const {a,w,q,delta,gap} = computeDeltaGap(row, m.kind);
-        const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
-        const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
-
-        const canEditWeek = (String(state.meId)===String(s.id)) || meIsMgr;
-        const roWeek = !canEditWeek;
-        const roAdmin = !allowAdmin;
-
-        return `<tr>
-          <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
-          <td><input data-fc="1" data-field="actual" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
-                type="number" step="any" value="${a===null?"":a}" ${roAdmin?"readonly":""}></td>
-          <td><input data-fc="1" data-field="weekPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
-                type="number" step="any" value="${w===null?"":w}" ${roWeek?"readonly":""}></td>
-          <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
-          <td><input data-fc="1" data-field="quarterPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
-                type="number" step="any" value="${q===null?"":q}" ${roAdmin?"readonly":""}></td>
-          <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
-        </tr>`;
-      }).join("");
-
       const badge = (String(state.meId)===String(s.id)) ? "Tôi" : (meIsMgr ? "Xem/Giao" : "CB");
       const badgeAttr = (meIsMgr && String(state.meId)!==String(s.id)) ? ` data-fc-action="pick" data-staff="${escapeHtml(s.id)}"` : "";
-      cards.push(`<div class="fcCard">
-        <div class="fcCardHead">
-          <div>
-            <div class="fcTitle">${escapeHtml(s.id)} - ${escapeHtml(s.name)}</div>
-            <div class="fcSubtitle">Nhập KH Tuần • Delta/GAP tự tính</div>
+
+      if(isMobile){
+        const canEditWeek = (String(state.meId)===String(s.id)) || meIsMgr;
+
+        const blocks = metrics.map((m, idx)=>{
+          const row=getFcRow(state.week, s.id, m.key);
+          const {a,w,q,delta,gap} = computeDeltaGap(row, m.kind);
+          const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
+          const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
+
+          const roWeek = !canEditWeek;
+          const roAdmin = !allowAdmin;
+          const open = idx===0;
+
+          return `<div class="fcMetricBlock ${open?"open":""}">
+            <button type="button" class="fcMetricHead" data-fc-toggle="1">
+              <div class="fcMetricHeadLeft">
+                <div class="fcMetricName">${escapeHtml(m.name)}</div>
+                ${m.unit?`<div class="fcMetricUnit">${escapeHtml(m.unit)}</div>`:""}
+              </div>
+              <div class="fcMetricChips">
+                <span class="fcChip">KH Tuần: ${w===null?"":fmtNum(w)}</span>
+                ${m.kind==="5col"?`<span class="fcChip ${dCls}">Δ: ${delta===null?"":fmtNum(delta)}</span>`:""}
+                <span class="fcChip ${gCls}">GAP: ${gap===null?"":fmtNum(gap)}</span>
+                <span class="fcChev">▾</span>
+              </div>
+            </button>
+            <div class="fcMetricBody">
+              <div class="fcFieldGrid">
+                <div class="fcField">
+                  <label>Đã TH ${roAdmin?"(QL)":""}</label>
+                  <input data-fc="1" data-field="actual" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                         type="number" step="any" inputmode="decimal" value="${a===null?"":a}" ${roAdmin?"readonly":""}>
+                </div>
+                <div class="fcField">
+                  <label>KH Tuần (CB nhập)</label>
+                  <input data-fc="1" data-field="weekPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                         type="number" step="any" inputmode="decimal" value="${w===null?"":w}" ${roWeek?"readonly":""}>
+                </div>
+                <div class="fcField">
+                  <label>KH Quý ${roAdmin?"(QL)":""}</label>
+                  <input data-fc="1" data-field="quarterPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}"
+                         type="number" step="any" inputmode="decimal" value="${q===null?"":q}" ${roAdmin?"readonly":""}>
+                </div>
+                <div class="fcField">
+                  <label>Kết quả</label>
+                  <div class="fcMetricChips" style="justify-content:flex-start">
+                    ${m.kind==="5col"?`<span class="fcChip ${dCls}">Δ (KH Tuần - Đã TH): ${delta===null?"":fmtNum(delta)}</span>`:""}
+                    <span class="fcChip ${gCls}">GAP (Đã TH - KH Quý): ${gap===null?"":fmtNum(gap)}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="fcHint">Mẹo: CB chỉ cần nhập <b>KH Tuần</b>. QL nhập/Import <b>Đã TH</b> &amp; <b>KH Quý</b>.</div>
+            </div>
+          </div>`;
+        }).join("");
+
+        cards.push(`<div class="fcCard">
+          <div class="fcCardHead">
+            <div>
+              <div class="fcTitle">${escapeHtml(s.id)} - ${escapeHtml(s.name)}</div>
+              <div class="fcSubtitle">Chạm từng chỉ tiêu để nhập số • iPhone tối ưu</div>
+            </div>
+            <div class="fcBadge"${badgeAttr}>${escapeHtml(badge)}</div>
           </div>
-          <div class="fcBadge" style="${(meIsMgr && String(state.meId)!==String(s.id))?'cursor:pointer':''}" ${badgeAttr}>${escapeHtml(badge)}</div>
-        </div>
-        <table class="fcMini">
-          <thead><tr>
-            <th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th>
-          </tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>`);
+          ${blocks}
+        </div>`);
+      } else {
+        // Desktop: keep mini table view
+        const rowsHtml = metrics.map(m=>{
+          const row=getFcRow(state.week, s.id, m.key);
+          const {a,w,q,delta,gap} = computeDeltaGap(row, m.kind);
+          const dCls = delta===null ? "" : (delta<0 ? "neg":"pos");
+          const gCls = gap===null ? "" : (gap<0 ? "neg":"pos");
+          const canEditWeek = (String(state.meId)===String(s.id)) || meIsMgr;
+          const roWeek = !canEditWeek;
+          const roAdmin = !allowAdmin;
+          return `<tr>
+            <td><span class="fcMetric">${escapeHtml(m.name)}</span>${m.unit?`<span class="fcUnit">${escapeHtml(m.unit)}</span>`:""}</td>
+            <td><input data-fc="1" data-field="actual" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}" type="number" step="any" value="${a??""}" ${roAdmin?"readonly":""}></td>
+            <td><input data-fc="1" data-field="weekPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}" type="number" step="any" value="${w??""}" ${roWeek?"readonly":""}></td>
+            <td class="fcNum"><span class="fcDelta ${dCls}">${delta===null?"":fmtNum(delta)}</span></td>
+            <td><input data-fc="1" data-field="quarterPlan" data-staff="${escapeHtml(s.id)}" data-metric="${escapeHtml(m.key)}" type="number" step="any" value="${q??""}" ${roAdmin?"readonly":""}></td>
+            <td class="fcNum"><span class="fcGap ${gCls}">${gap===null?"":fmtNum(gap)}</span></td>
+          </tr>`;
+        }).join("");
+
+        cards.push(`<div class="fcCard">
+          <div class="fcCardHead">
+            <div>
+              <div class="fcTitle">${escapeHtml(s.id)} - ${escapeHtml(s.name)}</div>
+              <div class="fcSubtitle">Nhập KH Tuần • Delta/GAP tự tính</div>
+            </div>
+            <div class="fcBadge"${badgeAttr}>${escapeHtml(badge)}</div>
+          </div>
+          <table class="fcMini">
+            <thead><tr><th>Chỉ tiêu</th><th>Đã TH</th><th>KH Tuần</th><th>Δ</th><th>KH Quý</th><th>GAP</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>`);
+      }
     }
 
     fcCards.innerHTML = cards.join("");
@@ -1262,6 +1386,7 @@ function safeOpenTask(task){
 
     // Forecast
     fcStaffFilter.onchange=()=>{ state.fcStaff = fcStaffFilter.value; renderForecastCards(); };
+    fcMetricFilter.onchange=()=>{ state.fcMetric = fcMetricFilter.value; renderForecastCards(); };
     btnFcToggle.onclick=()=>{
       if(!isManager(state.meId)) return alert("Chỉ quản lý mới bật sửa Thực hiện/KH Quý.");
       state.fcEditAdmin = !state.fcEditAdmin;
@@ -1298,6 +1423,14 @@ function safeOpenTask(task){
       
     // Forecast: click badge "Xem/Giao" (manager) -> choose view or assign
     fcCards.addEventListener("click",(e)=>{
+      // Accordion toggle
+      const tog = e.target.closest("[data-fc-toggle='1']");
+      if(tog){
+        const block = tog.closest(".fcMetricBlock");
+        if(block) block.classList.toggle("open");
+        return;
+      }
+
       const badge = e.target.closest("[data-fc-action='pick']");
       if(!badge) return;
       const staffId = badge.getAttribute("data-staff");
