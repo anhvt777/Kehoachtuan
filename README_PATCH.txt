@@ -1,8 +1,9 @@
-Kehoachtuan v6.4.6
+Kehoachtuan v6.4.7
 
 Fix:
-- Add top-level safeOpenAdd() shim in same scope as wire() to prevent 'safeOpenAdd is not defined'
-- Keeps contextual behavior: in Reports view opens Report modal, otherwise opens Task modal.
+- In Reports tab, Add button is no longer disabled; click shows clear alert if not selected/manager.
+- render() no longer calls renderReports() outside Reports view.
+- Tooltip on Add button guides user to select 'Tôi là' = Võ Tuấn Anh.
 
 Replace in repo root:
 - index.html
@@ -10,4 +11,4 @@ Replace in repo root:
 - app.js
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.4.6&ts=1
+https://anhvt777.github.io/Kehoachtuan/?v=6.4.7&ts=1

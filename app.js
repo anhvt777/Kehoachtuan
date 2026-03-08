@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.4.6";
+  const VERSION = "6.4.7";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -1138,7 +1138,8 @@ function safeOpenTask(task){
   function safeOpenAdd(){
     // Contextual add button: tasks vs reports
     if(state.view==="reports"){
-      if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
+      if(!state.meId) return alert("Bạn cần chọn ô \"Tôi là\" (Võ Tuấn Anh) để giao báo cáo.");
+        if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
       return safeOpenReport(null);
     }
     return safeOpenTask(null);
@@ -1830,14 +1831,16 @@ const newLists={
     if(btnAdd){
       const isRep = name==="reports";
       btnAdd.textContent = isRep ? "+ Thêm báo cáo" : "+ Thêm việc";
-      btnAdd.disabled = isRep && !isManager(state.meId);
+      // Keep button clickable; permission handled in safeOpenAdd for clearer UX
+      btnAdd.disabled = false;
+      btnAdd.title = isRep ? (isManager(state.meId) ? "Giao báo cáo" : "Chỉ quản lý mới giao báo cáo. Hãy chọn ô \"Tôi là\" = Võ Tuấn Anh.") : "Thêm công việc";
     }
     render();
   }
 
   function render(){
     refreshDropdowns();
-    renderReports();
+    if(state.view==="reports") renderReports();
     if(state.view==="tasks") renderTasks();
     if(state.view==="forecast") renderForecastCards();
     if(state.view==="reports" && typeof renderReports==="function") renderReports();
@@ -1849,6 +1852,7 @@ const newLists={
   function safeOpenAdd(){
     try{
       if(state.view==="reports"){
+        if(!state.meId) return alert("Bạn cần chọn ô \"Tôi là\" (Võ Tuấn Anh) để giao báo cáo.");
         if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
         return openReport(null);
       }
@@ -2022,6 +2026,7 @@ const newLists={
       };
 
       btnRepAdd.onclick=()=>{
+        if(!state.meId) return alert("Bạn cần chọn ô \"Tôi là\" (Võ Tuấn Anh) để giao báo cáo.");
         if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
         openReport(null);
       };
