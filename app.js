@@ -1,4 +1,4 @@
-/* Kehoachtuan v6.3.6 - Tasks + Forecast (Card view) - Local / Supabase
+/* Kehoachtuan v6.3.7 - Tasks + Forecast (Card view) - Local / Supabase
    - Forecast card UI (mobile-friendly)
    - Excel export matches Du kien tuan.xlsx layout
 */
@@ -252,8 +252,8 @@
 
   // Lists modal
   const listsBackdrop=$("#listsBackdrop"), listsClose=$("#listsClose"), btnListsCancel=$("#btnListsCancel"), btnListsSave=$("#btnListsSave");
-  const staffList=$("#staffList"), statusList=$("#statusList"), groupList=$("#groupList"), priorityList=$("#priorityList"), kpiList=$("#kpiList"), metricList=$("#metricList");
-  const btnAddStaff=$("#btnAddStaff"), btnAddStatus=$("#btnAddStatus"), btnAddGroup=$("#btnAddGroup"), btnAddPriority=$("#btnAddPriority"), btnAddKpi=$("#btnAddKpi"), btnAddMetric=$("#btnAddMetric");
+  const staffList=$("#staffList"), statusList=$("#statusList"), groupList=$("#groupList"), priorityList=$("#priorityList"), kpiList=$("#kpiList"), metricList=$("#metricList"), fcKpiList=$("#fcKpiList");
+  const btnAddStaff=$("#btnAddStaff"), btnAddStatus=$("#btnAddStatus"), btnAddGroup=$("#btnAddGroup"), btnAddPriority=$("#btnAddPriority"), btnAddKpi=$("#btnAddKpi"), btnAddMetric=$("#btnAddMetric"), btnAddFcKpi=$("#btnAddFcKpi");
   const stMode=$("#stMode"), stInterval=$("#stInterval"), stUrl=$("#stUrl"), stKey=$("#stKey");
 
   // Forecast
@@ -1063,7 +1063,32 @@ function safeOpenTask(task){
     return row;
   }
 
-  function setListTab(name){
+  
+  function mkRowFcKpi(obj){
+    const m = obj || {key:"", name:"", unit:"", kind:"4col"};
+    const row=document.createElement("div");
+    row.className="listRow";
+
+    const key=document.createElement("input"); key.value=String(m.key||""); key.readOnly=true; key.placeholder="Mã KPI";
+    const name=document.createElement("input"); name.value=String(m.name||""); name.placeholder="Tên hiển thị";
+    const unit=document.createElement("input"); unit.value=String(m.unit||""); unit.placeholder="Đơn vị (Tỷ đồng/TK/Thẻ...)";
+
+    const kind=document.createElement("select");
+    const opt4=document.createElement("option"); opt4.value="4col"; opt4.textContent="4 cột (không Δ)";
+    const opt5=document.createElement("option"); opt5.value="5col"; opt5.textContent="5 cột (có Δ)";
+    kind.appendChild(opt4); kind.appendChild(opt5);
+    kind.value = (String(m.kind||"4col")==="5col") ? "5col" : "4col";
+
+    const del=document.createElement("button"); del.className="delBtn"; del.textContent="Xoá"; del.onclick=()=>row.remove();
+
+    row.appendChild(key); row.appendChild(name); row.appendChild(unit); row.appendChild(kind); row.appendChild(del);
+    return row;
+  }
+
+  function genFcKpiKey(){
+    return "fc_" + Date.now().toString(36);
+  }
+function setListTab(name){
     $$(".tabs [data-listtab]").forEach(btn=>btn.classList.toggle("active", btn.dataset.listtab===name));
     $("#tab_staff").style.display = (name==="staff") ? "" : "none";
     $("#tab_others").style.display = (name==="others") ? "" : "none";
@@ -1078,6 +1103,11 @@ function safeOpenTask(task){
     priorityList.innerHTML=""; (L.priorities||[]).forEach(x=>priorityList.appendChild(mkRow1(String(x))));
     kpiList.innerHTML=""; (L.kpis||[]).forEach(x=>kpiList.appendChild(mkRow1(String(x))));
     metricList.innerHTML=""; (L.outputMetrics||[]).forEach(x=>metricList.appendChild(mkRow1(String(x))));
+    if(fcKpiList){
+      fcKpiList.innerHTML="";
+      const fm = (L.forecastMetrics && L.forecastMetrics.length) ? L.forecastMetrics : (CFG.forecastMetrics||[]);
+      (fm||[]).forEach(m=>fcKpiList.appendChild(mkRowFcKpi(m)));
+    }
 
     const S=getSettings();
     stMode.value=S.storageMode;
@@ -1100,15 +1130,37 @@ function safeOpenTask(task){
     for(const s of staffArr){ if(seen.has(s.id)) continue; seen.add(s.id); staffUniq.push(s); }
 
     const read1=(container)=>Array.from(new Set(Array.from(container.querySelectorAll("input")).map(i=>String(i.value||"").trim()).filter(Boolean)));
-    const newLists={
+    
+    const readFcKpis=()=>{
+      if(!fcKpiList) return (getLists().forecastMetrics||CFG.forecastMetrics||[]);
+      const arr=[];
+      for(const row of Array.from(fcKpiList.querySelectorAll(".listRow"))){
+        const inputs=row.querySelectorAll("input");
+        const key=String(inputs[0].value||"").trim();
+        const name=String(inputs[1].value||"").trim();
+        const unit=String(inputs[2].value||"").trim();
+        const sel=row.querySelector("select");
+        const kind=sel ? String(sel.value||"4col") : "4col";
+        if(!key) continue;
+        arr.push({key, name: name||key, unit, kind});
+      }
+      // uniq by key
+      const seen=new Set(); const out=[];
+      for(const m of arr){
+        if(seen.has(m.key)) continue;
+        seen.add(m.key);
+        out.push(m);
+      }
+      return out;
+    };
+const newLists={
       staff: staffUniq.length?staffUniq:getLists().staff,
       statuses: read1(statusList),
       groups: read1(groupList),
       priorities: read1(priorityList),
       kpis: read1(kpiList),
       outputMetrics: read1(metricList),
-      forecastMetrics: getLists().forecastMetrics || CFG.forecastMetrics || []
-    };
+      forecastMetrics: readFcKpis()};
     saveJSON(KEY_LISTS, newLists);
 
     const S=getSettings();
@@ -1120,6 +1172,7 @@ function safeOpenTask(task){
     };
     saveJSON(KEY_SETTINGS, newS);
     refreshDropdowns();
+    renderForecastCards();
     setupAutoCompactTopbar();
     // Expose handlers for inline onclick (iPhone reliability)
     window.__fcOpen = (staffId, metricKey) => { try{ openForecastModal(staffId, metricKey); }catch(e){ console.error(e); alert('Không mở được module nhập số: ' + e.message); } };
@@ -1386,6 +1439,7 @@ function safeOpenTask(task){
 
   function render(){
     refreshDropdowns();
+    renderForecastCards();
     if(state.view==="tasks") renderTasks();
     else renderForecastCards();
   }
@@ -1458,6 +1512,13 @@ function safeOpenTask(task){
     btnAddPriority.onclick=()=>priorityList.appendChild(mkRow1(""));
     btnAddKpi.onclick=()=>kpiList.appendChild(mkRow1(""));
     btnAddMetric.onclick=()=>metricList.appendChild(mkRow1(""));
+
+    if(btnAddFcKpi && fcKpiList){
+      btnAddFcKpi.onclick=()=>{
+        const key=genFcKpiKey();
+        fcKpiList.appendChild(mkRowFcKpi({key, name:"", unit:"", kind:"4col"}));
+      };
+    }
     btnListsSave.onclick=()=>{ saveLists(); closeModals(); };
 
     // Forecast (filters / admin / import)
@@ -1550,6 +1611,7 @@ function safeOpenTask(task){
   function init(){
     elWeek.value = state.week;
     refreshDropdowns();
+    renderForecastCards();
     setupTimer();
     wire();
 

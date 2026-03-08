@@ -819,3 +819,18 @@ button.fcBadge {
   border: 1px solid rgba(0,107,91,.22);
   cursor:pointer;
 }
+
+
+/* =========================
+   Forecast KPI Catalog (Danh mục -> KPI dự kiến)
+   v6.3.7
+   ========================= */
+#fcKpiList .listRow{
+  grid-template-columns: 120px 1fr 120px 110px 80px;
+}
+#fcKpiList .listRow input[readonly]{ background:#F6FAF9; color:#2B3A37; font-weight:800; }
+#fcKpiList select{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--line); background:#fff; }
+@media (max-width: 720px){
+  #fcKpiList .listRow{ grid-template-columns: 1fr; gap:8px; }
+  #fcKpiList .listRow .delBtn{ width:100%; }
+}

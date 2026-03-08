@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.3.6">
+  <link rel="stylesheet" href="styles.css?v=6.3.7">
 </head>
 <body>
   <div class="container">
@@ -12,7 +12,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.3.6)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.3.7)</span></div>
       </div>
 
       <div class="hright">
@@ -165,6 +165,7 @@
           <div class="grid2">
             <div><div class="k">Trạng thái</div><div id="statusList"></div><button class="btn ghost" id="btnAddStatus">+ Thêm trạng thái</button></div>
             <div><div class="k">KPI</div><div id="kpiList"></div><button class="btn ghost" id="btnAddKpi">+ Thêm KPI</button></div>
+            <div><div class="k">KPI dự kiến</div><div class="sub" style="margin:6px 0;color:var(--muted)">Chỉ dùng cho tab <b>Dự kiến số liệu</b> (độc lập với KPI ở Công việc). Chỉ đổi <b>Tên</b>/<b>Đơn vị</b>/<b>Loại</b>, không đổi Mã.</div><div id="fcKpiList"></div><button class="btn ghost" id="btnAddFcKpi">+ Thêm KPI dự kiến</button></div>
             <div><div class="k">Nhóm công việc</div><div id="groupList"></div><button class="btn ghost" id="btnAddGroup">+ Thêm nhóm</button></div>
             <div><div class="k">Output metric</div><div id="metricList"></div><button class="btn ghost" id="btnAddMetric">+ Thêm metric</button></div>
             <div><div class="k">Priority</div><div id="priorityList"></div><button class="btn ghost" id="btnAddPriority">+ Thêm priority</button></div>
@@ -251,7 +252,7 @@
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js?v=6.3.6"></script>
-  <script src="app.js?v=6.3.6"></script>
+  <script src="config.js?v=6.3.7"></script>
+  <script src="app.js?v=6.3.7"></script>
 </body>
 </html>

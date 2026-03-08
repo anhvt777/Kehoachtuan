@@ -1,15 +1,18 @@
-Kehoachtuan Forecast Modal Save/Close Fix v6.3.6
+Kehoachtuan Forecast KPI Catalog v6.3.7
 
 Replace in repo root:
 - index.html
-- app.js
 - styles.css
+- app.js
 
-Fixes:
-- Prevent page reload on forecast modal Save (bind fcForm submit -> preventDefault -> saveForecastModal()).
-- Enable closing forecast modal (X / Đóng / click backdrop).
-- Remove overly aggressive global capture listeners that caused unexpected modal opens.
-- Replace corrupted forecast event wiring with a clean, stable block.
+New:
+- Danh mục -> Danh mục khác: added "KPI dự kiến" editor (separate from KPI of Tasks).
+  Fields:
+  - Mã KPI (readonly): stable key for data mapping
+  - Tên hiển thị
+  - Đơn vị
+  - Loại: 5 cột (có Δ) / 4 cột (không Δ)
+- Saved to lists.forecastMetrics and used by tab "Dự kiến số liệu".
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.3.6&ts=1
+https://anhvt777.github.io/Kehoachtuan/?v=6.3.7&ts=1
