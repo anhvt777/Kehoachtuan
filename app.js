@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.4.8";
+  const VERSION = "6.4.9";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -737,7 +737,14 @@
     fillSelect(repFilterLead, leadItems, {valueKey:"id", labelKey:"name"});
     fillSelect(repFilterType, ["", ...(L.reportTypes||[])], {emptyLabel:"-- Lọc theo loại báo cáo --"});
     fillSelect(repFilterStatus, ["", ...(L.reportStatuses||[])], {emptyLabel:"-- Lọc theo trạng thái --"});
-  }
+  
+    // restore UI state (avoid hidden filters after refilling options)
+    if(repFilterLead) repFilterLead.value = state.repFilterLead || "";
+    if(repFilterType) repFilterType.value = state.repFilterType || "";
+    if(repFilterStatus) repFilterStatus.value = state.repFilterStatus || "";
+    if(repOnlyMine) repOnlyMine.checked = !!state.repOnlyMine;
+    if(repOnlyDueSoon) repOnlyDueSoon.checked = !!state.repOnlyDueSoon;
+}
 
   function renderReports(){
     if(!repTbody) return;
@@ -745,6 +752,11 @@
     const L=getLists();
     const staffMap=new Map((L.staff||[]).map(s=>[String(s.id), s]));
     const me=String(state.meId||"");
+    if(state.repOnlyMine && !me){
+      // If user hasn't selected "Tôi là", ignore "Chỉ việc của tôi" to avoid empty list.
+      state.repOnlyMine=false;
+      if(repOnlyMine) repOnlyMine.checked=false;
+    }
 
     let reps=[...(state.reports||[])];
 
@@ -1070,6 +1082,7 @@ async function syncAll(){
       if(s.storageMode==="supabase"){
         state.tasks = await sbFetchTasks();
         await sbFetchForecastWeek(state.week);
+        await loadReportsFromSupabase();
         mark(true, `supabase • synced • ${new Date().toLocaleTimeString("vi-VN")}`);
       }else{
         state.tasks = loadJSON(KEY_TASKS_LOCAL) || [];

@@ -1,10 +1,9 @@
-Kehoachtuan v6.4.8 - Fix Report Types dropdown
+Kehoachtuan v6.4.9 - Reports Supabase Sync Fix
 
-Fix:
-- getLists() now includes reportTypes & reportStatuses (saved in KEY_LISTS).
-- Danh mục modal now renders & saves reportTypes/reportStatuses (repTypeList/repStatusList).
-- Report modal uses robust string-based select population for Loại báo cáo and Trạng thái.
-- Node syntax check passed.
+Fixes:
+1) When storageMode=Supabase, syncAll() now loads reports from Supabase (loadReportsFromSupabase).
+2) Reports filters UI now reflects stored filter state after dropdown refill.
+3) If 'Chỉ việc của tôi' is on but 'Tôi là' is not selected, it auto turns off to avoid empty list.
 
 Replace in repo root:
 - index.html
@@ -12,8 +11,4 @@ Replace in repo root:
 - app.js
 
 Open:
-https://anhvt777.github.io/Kehoachtuan/?v=6.4.8&ts=1
-
-How to set report types:
-Danh mục -> Danh mục khác -> Loại báo cáo -> + Thêm -> Lưu danh mục
-Then open Báo cáo -> + Thêm báo cáo, dropdown should show items.
+https://anhvt777.github.io/Kehoachtuan/?v=6.4.9&ts=1
