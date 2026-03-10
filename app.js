@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.4.9";
+  const VERSION = "6.5.1";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -1070,6 +1070,79 @@
     };
     await fetch(sbUrl("reports"), {method:"POST", headers:sbHeaders(), body: JSON.stringify(payload)}).then(r=>r.json());
   }
+
+  async function loadStaffDirectoryFromSupabase(){
+    const s=getSettings();
+    if(String(s.storageMode||"local")!=="supabase") return;
+    if(!sbBase() || !s.supabaseAnonKey) return;
+    const current=getLists();
+    const mergeAndSave=(rows, full=false)=>{
+      const byId=new Map((current.staff||[]).map(x=>[String(x.id), {...x}]));
+      for(const r of (rows||[])){
+        const id=String(r.staff_id||r.id||"");
+        if(!id) continue;
+        const old=byId.get(id)||{};
+        byId.set(id, {
+          ...old,
+          id,
+          name: String(r.staff_name||r.name||old.name||id),
+          emailBidv: full ? String(r.email_bidv||old.emailBidv||"") : String(old.emailBidv||"") ,
+          emailGmail: full ? String(r.email_gmail||old.emailGmail||"") : String(old.emailGmail||"") ,
+          notifyEmail: String((full ? (r.notify_email||"") : "") || r.email || old.notifyEmail || old.emailBidv || old.emailGmail || ""),
+          notifySource: old.notifySource || "custom"
+        });
+      }
+      saveJSON(KEY_LISTS, {...current, staff: Array.from(byId.values())});
+    };
+
+    let res=await fetch(sbUrl("staff_directory?select=staff_id,staff_name,email_bidv,email_gmail,notify_email,email,is_manager&order=staff_id.asc"), {headers: sbHeaders()});
+    if(res.ok){
+      const rows=await res.json();
+      mergeAndSave(rows, true);
+      return;
+    }
+    // fallback schema: only email column exists
+    res=await fetch(sbUrl("staff_directory?select=staff_id,staff_name,email,is_manager&order=staff_id.asc"), {headers: sbHeaders()});
+    if(res.ok){
+      const rows=await res.json();
+      mergeAndSave(rows, false);
+    }
+  }
+
+  async function syncStaffDirectoryToSupabase(staffRows){
+    const s=getSettings();
+    if(String(s.storageMode||"local")!=="supabase") return {ok:false, skipped:true};
+    if(!sbBase() || !s.supabaseAnonKey) return {ok:false, skipped:true};
+    const baseHeaders={...sbHeaders(), "Prefer":"return=representation,resolution=merge-duplicates"};
+    const payloadFull=(staffRows||[]).map(x=>({
+      staff_id: String(x.id||""),
+      staff_name: String(x.name||""),
+      email_bidv: x.emailBidv || null,
+      email_gmail: x.emailGmail || null,
+      notify_email: x.notifyEmail || null,
+      email: x.notifyEmail || x.emailBidv || x.emailGmail || null,
+      is_manager: !!isManager(x.id),
+      updated_at: new Date().toISOString()
+    })).filter(x=>x.staff_id && x.staff_name);
+    if(!payloadFull.length) return {ok:true, skipped:true};
+
+    let res=await fetch(sbUrl("staff_directory?on_conflict=staff_id"), {method:"POST", headers: baseHeaders, body: JSON.stringify(payloadFull)});
+    if(res.ok) return {ok:true};
+
+    // fallback for older schema without email_bidv/email_gmail/notify_email
+    const payloadMin=payloadFull.map(x=>({
+      staff_id: x.staff_id,
+      staff_name: x.staff_name,
+      email: x.email,
+      is_manager: x.is_manager,
+      updated_at: x.updated_at
+    }));
+    res=await fetch(sbUrl("staff_directory?on_conflict=staff_id"), {method:"POST", headers: baseHeaders, body: JSON.stringify(payloadMin)});
+    if(res.ok) return {ok:true, fallback:true};
+    const txt=await res.text().catch(()=>"");
+    console.error("sync staff_directory failed", res.status, txt);
+    return {ok:false, status:res.status, text:txt};
+  }
 async function syncAll(){
     if(state.syncing) return;
     state.syncing=true;
@@ -1083,6 +1156,7 @@ async function syncAll(){
         state.tasks = await sbFetchTasks();
         await sbFetchForecastWeek(state.week);
         await loadReportsFromSupabase();
+        await loadStaffDirectoryFromSupabase();
         mark(true, `supabase • synced • ${new Date().toLocaleTimeString("vi-VN")}`);
       }else{
         state.tasks = loadJSON(KEY_TASKS_LOCAL) || [];
@@ -1105,6 +1179,9 @@ async function syncAll(){
       if(document.hidden) return;
       if(document.body.classList.contains("modal-open")) return; // avoid resetting fields while editing
       syncAll();
+    if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
+      console.info("Đã đồng bộ staff_directory lên Supabase");
+    }
     }, sec*1000);
 }
 
@@ -1279,12 +1356,56 @@ function safeOpenTask(task){
 
   // ---- Lists modal helpers ----
   function mkRow2(aVal="", bVal=""){
+    // legacy 2-col row (kept for compatibility)
     const row=document.createElement("div");
     row.className="listRow";
     const a=document.createElement("input"); a.value=aVal;
     const b=document.createElement("input"); b.value=bVal;
     const del=document.createElement("button"); del.className="delBtn"; del.textContent="Xoá"; del.onclick=()=>row.remove();
     row.appendChild(a); row.appendChild(b); row.appendChild(del);
+    return row;
+  }
+  function mkStaffRow(obj={}){
+    const s = obj || {};
+    const row=document.createElement("div");
+    row.className="staffRow";
+
+    const id=document.createElement("input"); id.value=String(s.id||""); id.placeholder="54000601"; id.dataset.field="id";
+    const name=document.createElement("input"); name.value=String(s.name||""); name.placeholder="VÕ TUẤN ANH"; name.dataset.field="name";
+    const bidv=document.createElement("input"); bidv.value=String(s.emailBidv||s.email||""); bidv.placeholder="anh_vt@bidv.com.vn"; bidv.dataset.field="emailBidv"; bidv.type="email";
+    const gmail=document.createElement("input"); gmail.value=String(s.emailGmail||""); gmail.placeholder="ten@gmail.com"; gmail.dataset.field="emailGmail"; gmail.type="email";
+
+    const notifyWrap=document.createElement("div"); notifyWrap.className="staffNotifyWrap";
+    const source=document.createElement("select"); source.dataset.field="notifySource";
+    [
+      ["","-- Chọn --"],
+      ["bidv","BIDV"],
+      ["gmail","Gmail"],
+      ["custom","Tuỳ chỉnh"]
+    ].forEach(([v,t])=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; source.appendChild(o); });
+    const notify=document.createElement("input"); notify.value=String(s.notifyEmail||s.email||s.emailBidv||s.emailGmail||""); notify.placeholder="email nhận digest"; notify.dataset.field="notifyEmail"; notify.type="email";
+
+    const detectSource=()=>{
+      const nv=String(notify.value||"").trim();
+      const bv=String(bidv.value||"").trim();
+      const gv=String(gmail.value||"").trim();
+      if(nv && bv && nv.toLowerCase()===bv.toLowerCase()) return "bidv";
+      if(nv && gv && nv.toLowerCase()===gv.toLowerCase()) return "gmail";
+      return nv?"custom":"";
+    };
+    source.value = String(s.notifySource||detectSource()||"");
+    const applySource=()=>{
+      if(source.value==="bidv") notify.value=String(bidv.value||"").trim();
+      else if(source.value==="gmail") notify.value=String(gmail.value||"").trim();
+    };
+    source.onchange=applySource;
+    bidv.oninput=()=>{ if(source.value==="bidv") notify.value=String(bidv.value||"").trim(); };
+    gmail.oninput=()=>{ if(source.value==="gmail") notify.value=String(gmail.value||"").trim(); };
+
+    const del=document.createElement("button"); del.className="delBtn"; del.textContent="Xoá"; del.onclick=()=>row.remove();
+
+    notifyWrap.appendChild(source); notifyWrap.appendChild(notify);
+    row.appendChild(id); row.appendChild(name); row.appendChild(bidv); row.appendChild(gmail); row.appendChild(notifyWrap); row.appendChild(del);
     return row;
   }
   function mkRow1(val=""){
@@ -1331,7 +1452,7 @@ function setListTab(name){
 
   function openLists(){
     const L=getLists();
-    staffList.innerHTML=""; (L.staff||[]).forEach(s=>staffList.appendChild(mkRow2(String(s.id||""), String(s.name||""))));
+    staffList.innerHTML=""; (L.staff||[]).forEach(s=>staffList.appendChild(mkStaffRow(s)));
     statusList.innerHTML=""; (L.statuses||[]).forEach(x=>statusList.appendChild(mkRow1(String(x))));
     groupList.innerHTML=""; (L.groups||[]).forEach(x=>groupList.appendChild(mkRow1(String(x))));
     priorityList.innerHTML=""; (L.priorities||[]).forEach(x=>priorityList.appendChild(mkRow1(String(x))));
@@ -1354,13 +1475,18 @@ function setListTab(name){
     openModal(listsBackdrop);
   }
 
-  function saveLists(){
+  async function saveLists(){
     const staffArr=[];
-    for(const row of Array.from(staffList.querySelectorAll(".listRow"))){
-      const ins=row.querySelectorAll("input");
-      const id=String(ins[0].value||"").trim();
-      const name=String(ins[1].value||"").trim();
-      if(id && name) staffArr.push({id,name});
+    for(const row of Array.from(staffList.querySelectorAll(".staffRow"))){
+      const get=(f)=>String(row.querySelector(`[data-field="${f}"]`)?.value||"").trim();
+      const id=get("id");
+      const name=get("name");
+      const emailBidv=get("emailBidv");
+      const emailGmail=get("emailGmail");
+      const notifySource=get("notifySource");
+      let notifyEmail=get("notifyEmail");
+      if(!notifyEmail) notifyEmail = emailBidv || emailGmail || "";
+      if(id && name) staffArr.push({id,name,emailBidv,emailGmail,notifyEmail,notifySource});
     }
     const seen=new Set(); const staffUniq=[];
     for(const s of staffArr){ if(seen.has(s.id)) continue; seen.add(s.id); staffUniq.push(s); }
@@ -1399,6 +1525,8 @@ const newLists={
       forecastMetrics: readFcKpis()};
     saveJSON(KEY_LISTS, newLists);
 
+    const staffSyncResult = await syncStaffDirectoryToSupabase(staffUniq);
+
     const S=getSettings();
     const newS={
       storageMode: stMode.value||S.storageMode,
@@ -1423,6 +1551,9 @@ const newLists={
     };
     setupTimer();
     syncAll();
+    if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
+      console.info("Đã đồng bộ staff_directory lên Supabase");
+    }
   }
 
   // ---- Export (Tasks + Forecast with Excel template layout) ----
@@ -1901,6 +2032,9 @@ const newLists={
       state.week = pickWeekStartISO(elWeek.value);
       elWeek.value = state.week;
       syncAll();
+    if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
+      console.info("Đã đồng bộ staff_directory lên Supabase");
+    }
     };
 
     elMe.onchange=()=>{
@@ -1954,7 +2088,7 @@ const newLists={
     });
 
     $$(".tabs [data-listtab]").forEach(btn=>btn.addEventListener("click",()=>setListTab(btn.dataset.listtab)));
-    btnAddStaff.onclick=()=>staffList.appendChild(mkRow2("",""));
+    btnAddStaff.onclick=()=>staffList.appendChild(mkStaffRow({}));
     btnAddStatus.onclick=()=>statusList.appendChild(mkRow1(""));
     btnAddGroup.onclick=()=>groupList.appendChild(mkRow1(""));
     btnAddPriority.onclick=()=>priorityList.appendChild(mkRow1(""));
@@ -1967,7 +2101,7 @@ const newLists={
         fcKpiList.appendChild(mkRowFcKpi({key, name:"", unit:"", kind:"4col"}));
       };
     }
-    btnListsSave.onclick=()=>{ saveLists(); closeModals(); };
+    btnListsSave.onclick=async()=>{ await saveLists(); closeModals(); };
 
     // Forecast (filters / admin / import)
     fcStaffFilter.onchange=()=>{ state.fcStaff = fcStaffFilter.value; renderForecastCards(); };
@@ -2119,6 +2253,9 @@ const newLists={
     wire();
 
     syncAll();
+    if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
+      console.info("Đã đồng bộ staff_directory lên Supabase");
+    }
   }
 
   init();

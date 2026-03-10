@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>PGD Đ9 - Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.4.9">
+  <title>Theo dõi & Phân công công việc</title>
+  <link rel="stylesheet" href="styles.css?v=6.5.1">
 </head>
 <body>
   <div class="container">
     <div class="topbar">
     <div class="header">
       <div class="hleft">
-        <h1>PGD Đường 9 - Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.4.9)</span></div>
+        <h1>Theo dõi &amp; Phân công công việc</h1>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.5.1)</span></div>
       </div>
 
       <div class="hright">
@@ -208,8 +208,17 @@
         </div>
 
         <div id="tab_staff">
-          <div class="sub" style="margin-bottom:8px;color:var(--muted)">Danh sách cán bộ (StaffID + Tên). Bạn có thể thêm/bớt.</div>
+          <div class="sub" style="margin-bottom:8px;color:var(--muted)">Danh sách cán bộ + email nhận thông báo. Khi dùng <b>Supabase</b>, hệ thống sẽ tự đồng bộ <b>Email nhận thông báo</b> lên bảng <b>staff_directory.email</b> để digest gửi đúng địa chỉ.</div>
+          <div class="staffHead">
+            <div>StaffID</div>
+            <div>Tên cán bộ</div>
+            <div>Email BIDV</div>
+            <div>Gmail dự phòng</div>
+            <div>Email nhận thông báo</div>
+            <div></div>
+          </div>
           <div id="staffList"></div>
+          <div class="smallHelp" style="margin:8px 0 10px 0">Gợi ý: điền đủ Email BIDV và Gmail. Ô <b>Email nhận thông báo</b> có thể chọn nhanh BIDV/Gmail hoặc nhập tay email khác khi cần.</div>
           <button class="btn ghost" id="btnAddStaff">+ Thêm cán bộ</button>
         </div>
 
@@ -243,6 +252,7 @@
             <div class="field full"><label>Supabase anon key (Publishable/anon)</label><input id="stKey" placeholder="eyJhbGciOi..."/></div>
           </div>
           <div class="smallHelp">Khuyến nghị: 5–10 giây để web mượt và tiết kiệm pin.</div>
+          <div class="smallHelp" style="margin-top:8px">Khi bật <b>Supabase</b>, web sẽ tự đồng bộ <b>Email nhận thông báo</b> của cán bộ lên bảng <b>staff_directory</b> mỗi lần bạn bấm <b>Lưu danh mục</b>.</div>
         </div>
       </div>
       <div class="mfoot">
@@ -371,7 +381,7 @@
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js?v=6.4.9"></script>
-  <script src="app.js?v=6.4.9"></script>
+  <script src="config.js?v=6.5.1"></script>
+  <script src="app.js?v=6.5.1"></script>
 </body>
 </html>
