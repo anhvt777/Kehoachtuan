@@ -2,10 +2,11 @@ name: Daily Digest Email
 
 on:
   schedule:
-    # 07:15 VN = 00:15 UTC, Mon-Fri
-    - cron: "15 0 * * 1-5"
-    # 16:30 VN = 09:30 UTC, Mon-Fri
-    - cron: "30 9 * * 1-5"
+    # TEST tối nay:
+    # 20:35 VN = 13:35 UTC
+    - cron: "35 13 * * 1-5"
+    # 20:45 VN = 13:45 UTC
+    - cron: "45 13 * * 1-5"
   workflow_dispatch:
     inputs:
       run:
@@ -24,8 +25,9 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run=${{ github.event.inputs.run }}" >> "$GITHUB_OUTPUT"
           else
-            HOUR=$(date -u +"%H")
-            if [ "$HOUR" = "09" ]; then
+            if [ "${{ github.event.schedule }}" = "35 13 * * 1-5" ]; then
+              echo "run=morning" >> "$GITHUB_OUTPUT"
+            elif [ "${{ github.event.schedule }}" = "45 13 * * 1-5" ]; then
               echo "run=afternoon" >> "$GITHUB_OUTPUT"
             else
               echo "run=morning" >> "$GITHUB_OUTPUT"
