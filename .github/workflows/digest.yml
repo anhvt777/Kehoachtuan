@@ -2,11 +2,11 @@ name: Daily Digest Email
 
 on:
   schedule:
-    # TEST tối nay:
-    # 20:35 VN = 13:35 UTC
-    - cron: "35 13 * * 1-5"
-    # 20:45 VN = 13:45 UTC
-    - cron: "45 13 * * 1-5"
+    # TEST lại tối nay:
+    # 21:10 VN = 14:10 UTC
+    - cron: "10 14 * * 1-5"
+    # 21:20 VN = 14:20 UTC
+    - cron: "20 14 * * 1-5"
   workflow_dispatch:
     inputs:
       run:
@@ -18,6 +18,11 @@ jobs:
   send:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug trigger info
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "schedule=${{ github.event.schedule }}"
+
       - name: Determine run type
         id: mode
         shell: bash
@@ -25,14 +30,18 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run=${{ github.event.inputs.run }}" >> "$GITHUB_OUTPUT"
           else
-            if [ "${{ github.event.schedule }}" = "35 13 * * 1-5" ]; then
+            if [ "${{ github.event.schedule }}" = "10 14 * * 1-5" ]; then
               echo "run=morning" >> "$GITHUB_OUTPUT"
-            elif [ "${{ github.event.schedule }}" = "45 13 * * 1-5" ]; then
+            elif [ "${{ github.event.schedule }}" = "20 14 * * 1-5" ]; then
               echo "run=afternoon" >> "$GITHUB_OUTPUT"
             else
               echo "run=morning" >> "$GITHUB_OUTPUT"
             fi
           fi
+
+      - name: Debug resolved mode
+        run: |
+          echo "resolved_run=${{ steps.mode.outputs.run }}"
 
       - name: Call Supabase digest-email
         shell: bash
