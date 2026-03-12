@@ -268,6 +268,60 @@
   }
   function sbUrl(path){ return `${sbBase()}/rest/v1/${path}`; }
 
+  async function sbReadJSONConfig(configKey){
+    const attempts = [
+      `app_config?select=config_value&config_key=eq.${encodeURIComponent(configKey)}&limit=1`,
+      `app_meta?select=config_value&config_key=eq.${encodeURIComponent(configKey)}&limit=1`,
+      `app_meta?select=meta_value&meta_key=eq.${encodeURIComponent(configKey)}&limit=1`
+    ];
+    for(const path of attempts){
+      try{
+        const res = await fetch(sbUrl(path), {headers: sbHeaders()});
+        if(!res.ok) continue;
+        const rows = await res.json();
+        const first = Array.isArray(rows) ? rows[0] : null;
+        const raw = first ? (first.config_value ?? first.meta_value ?? null) : null;
+        if(raw && typeof raw === "object") return raw;
+        if(typeof raw === "string"){
+          try{ return JSON.parse(raw); }catch{ return null; }
+        }
+        return null;
+      }catch(e){
+        console.warn("read config failed", path, e);
+      }
+    }
+    return null;
+  }
+
+  async function sbWriteJSONConfig(configKey, value){
+    const jsonValue = value ?? {};
+    const attempts = [
+      {
+        path: `app_config?on_conflict=config_key`,
+        payload: [{config_key: configKey, config_value: jsonValue, updated_at: new Date().toISOString()}]
+      },
+      {
+        path: `app_meta?on_conflict=config_key`,
+        payload: [{config_key: configKey, config_value: jsonValue, updated_at: new Date().toISOString()}]
+      },
+      {
+        path: `app_meta?on_conflict=meta_key`,
+        payload: [{meta_key: configKey, meta_value: jsonValue, updated_at: new Date().toISOString()}]
+      }
+    ];
+    for(const item of attempts){
+      try{
+        const headers = sbHeaders();
+        headers["Prefer"] = "return=minimal,resolution=merge-duplicates";
+        const res = await fetch(sbUrl(item.path), {method:"POST", headers, body: JSON.stringify(item.payload)});
+        if(res.ok) return {ok:true};
+      }catch(e){
+        console.warn("write config failed", item.path, e);
+      }
+    }
+    return {ok:false};
+  }
+
   // ---- State ----
   const state={
     _lastTouch: 0,
@@ -291,6 +345,10 @@
     fcStaff:"",
     fcMetric:"",
     fcEditAdmin:false,
+    sortField:"deadline",
+    sortDir:"asc",
+    repSortField:"deadline",
+    repSortDir:"asc",
     syncing:false,
     timer:null
   };
@@ -480,7 +538,29 @@
     }).sort((a,b)=>{
       const ao=isOverdue(a)?0:1, bo=isOverdue(b)?0:1;
       if(ao!==bo) return ao-bo;
-      return (a.deadline||"").localeCompare(b.deadline||"");
+
+      const field = String(state.sortField||"deadline");
+      const dir = state.sortDir === "desc" ? -1 : 1;
+      const getVal = (row) => {
+        switch(field){
+          case "seq": return Number(row.seq||0);
+          case "group": return String(row.group||"").toLowerCase();
+          case "title": return String(row.title||"").toLowerCase();
+          case "deadline": {
+            const d=parseISO(row.deadline||"");
+            return d ? d.getTime() : Number.MAX_SAFE_INTEGER;
+          }
+          case "ownerName": return String(row.ownerName||row.ownerId||"").toLowerCase();
+          case "status": return String(row.status||"").toLowerCase();
+          case "note": return String(row.note||"").toLowerCase();
+          case "priority": return String(row.priority||"").toLowerCase();
+          default: return String(row[field]||"").toLowerCase();
+        }
+      };
+      const va=getVal(a), vb=getVal(b);
+      if(va<vb) return -1*dir;
+      if(va>vb) return 1*dir;
+      return String(a.id||"").localeCompare(String(b.id||""));
     });
   }
 
@@ -681,7 +761,7 @@
   function renderForecastCards(){
     const L=getLists();
     const staffAll=L.staff.filter(s=>String(s.id)!=="54000600");
-    const metrics=L.forecastMetrics || [];
+    const metrics=(L.forecastMetrics || []).filter(m=>!state.fcMetric || String(m.key)===String(state.fcMetric));
     const visibleStaff = state.fcStaff
       ? staffAll.filter(s=>String(s.id)===String(state.fcStaff))
       : staffAll;
@@ -734,7 +814,7 @@
   function ensureReportFilters(){
     const L=getLists();
     const leadItems=[{id:"", name:"-- Lọc theo đầu mối --"}].concat((L.staff||[]).filter(s=>String(s.id)!=="54000600").map(s=>({id:String(s.id), name:`${s.id} - ${s.name}`})));
-    fillSelect(repFilterLead, leadItems, {valueKey:"id", labelKey:"name"});
+    fillSelect(repFilterLead, leadItems, {valueKey:"id", labelFn:x=>x.name});
     fillSelect(repFilterType, ["", ...(L.reportTypes||[])], {emptyLabel:"-- Lọc theo loại báo cáo --"});
     fillSelect(repFilterStatus, ["", ...(L.reportStatuses||[])], {emptyLabel:"-- Lọc theo trạng thái --"});
   
@@ -775,7 +855,33 @@
     repDueSoon.textContent=String(dueSoon);
     repOverdue.textContent=String(overdue);
 
-    reps.sort((a,b)=> new Date(a.deadline||0)-new Date(b.deadline||0));
+    reps.sort((a,b)=>{
+      const field = String(state.repSortField||"deadline");
+      const dir = state.repSortDir === "desc" ? -1 : 1;
+      const getVal = (row) => {
+        switch(field){
+          case "id": return Number(row.id||0);
+          case "type": return String(row.type||"").toLowerCase();
+          case "name": return String(row.name||"").toLowerCase();
+          case "deadline": {
+            const d=new Date(row.deadline||0);
+            return Number.isNaN(d.getTime()) ? Number.MAX_SAFE_INTEGER : d.getTime();
+          }
+          case "lead": return String((staffMap.get(String(row.leadId||""))?.name)||row.leadId||"").toLowerCase();
+          case "status": return String(row.status||"").toLowerCase();
+          case "progress": {
+            const total=(row.collaborators||[]).length;
+            const done=(row.collaborators||[]).map(String).filter(id=>String((row.parts||{})[id]?.status||"")==="Done").length;
+            return total===0 ? 1 : done/total;
+          }
+          default: return String(row[field]||"").toLowerCase();
+        }
+      };
+      const va=getVal(a), vb=getVal(b);
+      if(va<vb) return -1*dir;
+      if(va>vb) return 1*dir;
+      return Number(a.id||0)-Number(b.id||0);
+    });
 
     repTbody.innerHTML = reps.map(rep=>{
       const lead = staffMap.get(String(rep.leadId||"")) || {name: rep.leadId||""};
@@ -1056,8 +1162,9 @@
     const s=getSettings();
     if(String(s.storageMode||"local")!=="supabase") return;
     if(!sbBase() || !s.supabaseAnonKey) return;
-    const payload={
+    const payload=[{
       id: String(rep.id),
+      created_at: rep.createdAt || new Date().toISOString(),
       type: rep.type,
       name: rep.name,
       deadline: rep.deadline,
@@ -1066,9 +1173,13 @@
       status: rep.status,
       note: rep.note,
       collaborators: rep.collaborators || [],
-      parts: rep.parts || {}
-    };
-    await fetch(sbUrl("reports"), {method:"POST", headers:sbHeaders(), body: JSON.stringify(payload)}).then(r=>r.json());
+      parts: rep.parts || {},
+      updated_at: new Date().toISOString()
+    }];
+    const headers = sbHeaders();
+    headers["Prefer"] = "return=representation,resolution=merge-duplicates";
+    const res = await fetch(sbUrl("reports?on_conflict=id"), {method:"POST", headers, body: JSON.stringify(payload)});
+    if(!res.ok) throw new Error("save report failed " + res.status);
   }
 
   async function loadStaffDirectoryFromSupabase(){
@@ -1143,6 +1254,32 @@
     console.error("sync staff_directory failed", res.status, txt);
     return {ok:false, status:res.status, text:txt};
   }
+  async function loadListsFromSupabase(){
+    const s=getSettings();
+    if(String(s.storageMode||"local")!=="supabase") return;
+    if(!sbBase() || !s.supabaseAnonKey) return;
+    const remote = await sbReadJSONConfig("lists_v6");
+    if(!remote || typeof remote !== "object") return;
+    const merged = {...getLists(), ...remote};
+    if(Array.isArray(merged.staff) && merged.staff.length){
+      const seen=new Set();
+      merged.staff = merged.staff.filter(x=>{
+        const id=String((x&&x.id)||"").trim();
+        if(!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    }
+    saveJSON(KEY_LISTS, merged);
+  }
+
+  async function syncListsToSupabase(listsObj){
+    const s=getSettings();
+    if(String(s.storageMode||"local")!=="supabase") return {ok:false, skipped:true};
+    if(!sbBase() || !s.supabaseAnonKey) return {ok:false, skipped:true};
+    return await sbWriteJSONConfig("lists_v6", listsObj);
+  }
+
 async function syncAll(){
     if(state.syncing) return;
     state.syncing=true;
@@ -1153,6 +1290,7 @@ async function syncAll(){
     try{
       const s=getSettings();
       if(s.storageMode==="supabase"){
+        await loadListsFromSupabase();
         state.tasks = await sbFetchTasks();
         await sbFetchForecastWeek(state.week);
         await loadReportsFromSupabase();
@@ -1179,11 +1317,8 @@ async function syncAll(){
       if(document.hidden) return;
       if(document.body.classList.contains("modal-open")) return; // avoid resetting fields while editing
       syncAll();
-    if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
-      console.info("Đã đồng bộ staff_directory lên Supabase");
-    }
     }, sec*1000);
-}
+  }
 
   // ---- Task modal ----
   function nextSeq(){ return state.tasks.reduce((m,t)=>Math.max(m, Number(t.seq||0)),0)+1; }
@@ -1522,10 +1657,11 @@ const newLists={
       priorities: read1(priorityList),
       kpis: read1(kpiList),
       outputMetrics: read1(metricList),
-      forecastMetrics: readFcKpis()};
+      forecastMetrics: readFcKpis(),
+      reportTypes: repTypeList ? read1(repTypeList) : (getLists().reportTypes||[]),
+      reportStatuses: repStatusList ? read1(repStatusList) : (getLists().reportStatuses||[])
+    };
     saveJSON(KEY_LISTS, newLists);
-
-    const staffSyncResult = await syncStaffDirectoryToSupabase(staffUniq);
 
     const S=getSettings();
     const newS={
@@ -1535,6 +1671,9 @@ const newLists={
       syncSeconds: Math.max(3, Number(stInterval.value||S.syncSeconds))
     };
     saveJSON(KEY_SETTINGS, newS);
+
+    const staffSyncResult = await syncStaffDirectoryToSupabase(staffUniq);
+    const listsSyncResult = await syncListsToSupabase(newLists);
     refreshDropdowns();
     if(typeof renderReports==="function") renderReports();
     renderForecastCards();
@@ -1553,6 +1692,9 @@ const newLists={
     syncAll();
     if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
       console.info("Đã đồng bộ staff_directory lên Supabase");
+    }
+    if(listsSyncResult && listsSyncResult.ok && !listsSyncResult.skipped){
+      console.info("Đã đồng bộ danh mục lên Supabase");
     }
   }
 
@@ -2032,15 +2174,13 @@ const newLists={
       state.week = pickWeekStartISO(elWeek.value);
       elWeek.value = state.week;
       syncAll();
-    if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
-      console.info("Đã đồng bộ staff_directory lên Supabase");
-    }
     };
 
     elMe.onchange=()=>{
       state.meId = elMe.value;
       // default forecast filter to self for non-managers
       if(!isManager(state.meId)) state.fcStaff = state.meId;
+      else if(String(state.fcStaff||"")===String(state.meId||"")) state.fcStaff = "";
       if(!document.body.classList.contains("modal-open")) render();
     };
 
@@ -2085,6 +2225,36 @@ const newLists={
         safeOpenTask(t);
       }
       if(act==="del"){ if(confirm("Xoá công việc này?")) delTask(id); }
+    });
+
+    const taskHeaderMap = {"ID":"seq","Nhóm công việc":"group","Công việc / Hoạt động":"title","Deadline":"deadline","CB đầu mối":"ownerName","Trạng thái":"status","Kết quả / Ghi chú":"note"};
+    document.querySelectorAll("#viewTasks thead th").forEach(th=>{
+      const label=String(th.textContent||"").trim();
+      const field=th.dataset.sort || taskHeaderMap[label];
+      if(!field) return;
+      th.dataset.sort = field;
+      th.style.cursor = "pointer";
+      th.title = "Bấm để sắp xếp";
+      th.onclick=()=>{
+        if(state.sortField===field) state.sortDir = state.sortDir==="asc" ? "desc" : "asc";
+        else { state.sortField=field; state.sortDir="asc"; }
+        renderTasks();
+      };
+    });
+
+    const repHeaderMap = {"ID":"id","Loại báo cáo":"type","Báo cáo":"name","Deadline":"deadline","Đầu mối":"lead","Tiến độ phối hợp":"progress","Trạng thái":"status"};
+    document.querySelectorAll("#viewReports thead th").forEach(th=>{
+      const label=String(th.textContent||"").trim();
+      const field=th.dataset.sort || repHeaderMap[label];
+      if(!field) return;
+      th.dataset.sort = field;
+      th.style.cursor = "pointer";
+      th.title = "Bấm để sắp xếp";
+      th.onclick=()=>{
+        if(state.repSortField===field) state.repSortDir = state.repSortDir==="asc" ? "desc" : "asc";
+        else { state.repSortField=field; state.repSortDir="asc"; }
+        renderReports();
+      };
     });
 
     $$(".tabs [data-listtab]").forEach(btn=>btn.addEventListener("click",()=>setListTab(btn.dataset.listtab)));
@@ -2253,9 +2423,6 @@ const newLists={
     wire();
 
     syncAll();
-    if(staffSyncResult && staffSyncResult.ok && !staffSyncResult.skipped){
-      console.info("Đã đồng bộ staff_directory lên Supabase");
-    }
   }
 
   init();

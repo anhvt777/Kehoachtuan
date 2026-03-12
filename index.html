@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.5.1">
+  <link rel="stylesheet" href="styles.css?v=6.6.0">
 </head>
 <body>
   <div class="container">
@@ -12,7 +12,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.5.1)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.6.0)</span></div>
       </div>
 
       <div class="hright">
@@ -62,7 +62,7 @@
 
       <div class="note">
         Gợi ý: Việc chưa <b>Done</b> và <b>CarryOver=Y</b> sẽ tự hiển thị ở tuần hiện tại. Hàng quá hạn tự tô đỏ. Định dạng ngày hiển thị: <b>dd/mm/yyyy</b>.<br/>
-        Lưu ý: GitHub Pages là web tĩnh. Nếu bạn cần nhiều người cập nhật chung “real-time”, hãy chọn <b>Storage mode = Supabase</b> trong <b>Danh mục → Lưu trữ</b>.
+        Lưu ý: GitHub Pages là web tĩnh. Nếu bạn cần nhiều người cập nhật chung “real-time”, hãy chọn <b>Storage mode = Supabase</b> trong <b>Danh mục → Lưu trữ</b>. Có thể bấm trực tiếp tiêu đề cột để <b>sắp xếp</b>.
       </div>
 
       <div class="tableWrap">
@@ -70,13 +70,13 @@
           <table>
             <thead>
               <tr>
-                <th style="width:70px">ID</th>
-                <th style="width:160px">Nhóm công việc</th>
-                <th>Công việc / Hoạt động</th>
-                <th style="width:120px">Deadline</th>
-                <th style="width:170px">CB đầu mối</th>
-                <th style="width:120px">Trạng thái</th>
-                <th>Kết quả / Ghi chú</th>
+                <th data-sort="seq" class="sortable" title="Bấm để sắp xếp" style="width:70px">ID</th>
+                <th data-sort="group" class="sortable" title="Bấm để sắp xếp" style="width:160px">Nhóm công việc</th>
+                <th data-sort="title" class="sortable" title="Bấm để sắp xếp">Công việc / Hoạt động</th>
+                <th data-sort="deadline" class="sortable" title="Bấm để sắp xếp" style="width:120px">Deadline</th>
+                <th data-sort="ownerName" class="sortable" title="Bấm để sắp xếp" style="width:170px">CB đầu mối</th>
+                <th data-sort="status" class="sortable" title="Bấm để sắp xếp" style="width:120px">Trạng thái</th>
+                <th data-sort="note" class="sortable" title="Bấm để sắp xếp">Kết quả / Ghi chú</th>
                 <th style="width:150px">Tác vụ</th>
               </tr>
             </thead>
@@ -106,9 +106,7 @@
         Lưu ý: Nếu bạn để <b>local</b> thì mỗi thiết bị một dữ liệu. Muốn realtime giữa điện thoại và máy quản lý, hãy dùng <b>Supabase</b>.
       </div>
     </section>
-  </div>
 
-  
     <!-- REPORTS VIEW -->
     <section id="viewReports" style="display:none">
       <div class="note">
@@ -142,14 +140,14 @@
           <table id="repTable">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Loại báo cáo</th>
-                <th>Báo cáo</th>
-                <th>Deadline</th>
-                <th>Đầu mối</th>
+                <th data-rep-sort="id" class="sortable" title="Bấm để sắp xếp">ID</th>
+                <th data-rep-sort="type" class="sortable" title="Bấm để sắp xếp">Loại báo cáo</th>
+                <th data-rep-sort="name" class="sortable" title="Bấm để sắp xếp">Báo cáo</th>
+                <th data-rep-sort="deadline" class="sortable" title="Bấm để sắp xếp">Deadline</th>
+                <th data-rep-sort="lead" class="sortable" title="Bấm để sắp xếp">Đầu mối</th>
                 <th>Phối hợp</th>
-                <th>Tiến độ phối hợp</th>
-                <th>Trạng thái</th>
+                <th data-rep-sort="progress" class="sortable" title="Bấm để sắp xếp">Tiến độ phối hợp</th>
+                <th data-rep-sort="status" class="sortable" title="Bấm để sắp xếp">Trạng thái</th>
                 <th>Tác vụ</th>
               </tr>
             </thead>
@@ -252,7 +250,7 @@
             <div class="field full"><label>Supabase anon key (Publishable/anon)</label><input id="stKey" placeholder="eyJhbGciOi..."/></div>
           </div>
           <div class="smallHelp">Khuyến nghị: 5–10 giây để web mượt và tiết kiệm pin.</div>
-          <div class="smallHelp" style="margin-top:8px">Khi bật <b>Supabase</b>, web sẽ tự đồng bộ <b>Email nhận thông báo</b> của cán bộ lên bảng <b>staff_directory</b> mỗi lần bạn bấm <b>Lưu danh mục</b>.</div>
+          <div class="smallHelp" style="margin-top:8px">Khi bật <b>Supabase</b>, web sẽ tự đồng bộ <b>Email nhận thông báo</b> của cán bộ lên bảng <b>staff_directory</b> và đồng bộ <b>Danh mục khác</b> qua bảng <b>app_config</b> mỗi lần bạn bấm <b>Lưu danh mục</b>.</div>
         </div>
       </div>
       <div class="mfoot">
@@ -378,10 +376,11 @@
 
 
   <input id="fcImportFile" type="file" accept=".xlsx,.xls" style="display:none"/>
+  </div>
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js?v=6.5.1"></script>
-  <script src="app.js?v=6.5.1"></script>
+  <script src="config.js?v=6.6.0"></script>
+  <script src="app.js?v=6.6.0"></script>
 </body>
 </html>
