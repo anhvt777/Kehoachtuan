@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.1";
+  const VERSION = "6.8.2";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -268,6 +268,56 @@
     return Math.max(0, Math.round((n/d)*100));
   }
 
+  function isDueThisWeekTask(t){
+    const dl=parseISO(t.deadline||"");
+    const ws=parseISO(state.week);
+    const we=parseISO(dashboardWeekEndISO(state.week));
+    if(!dl || !ws || !we) return false;
+    return dl>=ws && dl<=we && !isDone(t.status);
+  }
+
+  function clearDashboardTaskDrill(){
+    state.dashboardTaskFilter="";
+    state.dashboardTaskStaff="";
+  }
+
+  function taskDrillLabel(mode){
+    return ({new:"Phát sinh", due:"Đến hạn", over:"Quá hạn"}[String(mode||"")] || "Công việc");
+  }
+
+  function openTasksFromDashboard(staffId, mode){
+    state.filterAssignee = String(staffId||"");
+    state.filterStatus = "";
+    state.filterGroup = "";
+    state.onlyOverdue = String(mode||"")==="over";
+    state.dashboardTaskStaff = String(staffId||"");
+    state.dashboardTaskFilter = String(mode||"");
+    if(filterOverdue) filterOverdue.checked = !!state.onlyOverdue;
+    setView("tasks");
+    renderTasks();
+  }
+
+  function clearDashboardReportDrill(){
+    state.dashboardReportMode="";
+    state.dashboardReportStaff="";
+  }
+
+  function reportDrillLabel(mode){
+    return ({lead:"Đầu mối", collab:"Phối hợp", late:"Quá hạn"}[String(mode||"")] || "Báo cáo");
+  }
+
+  function openReportsFromDashboard(staffId, mode){
+    state.repFilterLead = String(mode)==="lead" ? String(staffId||"") : "";
+    state.repFilterType = "";
+    state.repFilterStatus = "";
+    state.repOnlyMine = false;
+    state.repOnlyDueSoon = false;
+    state.dashboardReportStaff = String(staffId||"");
+    state.dashboardReportMode = String(mode||"");
+    setView("reports");
+    renderReports();
+  }
+
   function dashboardTaskCompareRows(tasks, staff){
     const weekStart=parseISO(state.week);
     const weekEnd=parseISO(dashboardWeekEndISO(state.week));
@@ -328,8 +378,11 @@
         const width=Math.max(item.value>0 ? 10 : 0, (item.value/maxVal)*innerW);
         const textX=item.value>0 ? Math.min(pad.left+innerW-8, pad.left+width+8) : pad.left+8;
         return `
-          <rect x="${pad.left}" y="${item.y}" width="${width}" height="${barH}" rx="6" fill="${colors[item.key]}" opacity="0.92"></rect>
-          <text x="${textX}" y="${item.y+barH-2}" font-size="11" fill="#16312b">${item.value}</text>`;
+          <g class="dashBarHot" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="${item.key}" style="cursor:pointer">
+            <title>${escapeHtml(r.alias)} • ${escapeHtml(item.label)}: ${item.value}</title>
+            <rect x="${pad.left}" y="${item.y}" width="${width}" height="${barH}" rx="6" fill="${colors[item.key]}" opacity="0.92"></rect>
+            <text x="${textX}" y="${item.y+barH-2}" font-size="11" fill="#16312b">${item.value}</text>
+          </g>`;
       }).join('');
       return `
         <g>
@@ -343,7 +396,7 @@
       <div class="dashChartHeader">
         <div>
           <div class="dashChartTitle">${escapeHtml(weekLabel)}</div>
-          <div class="dashChartSub">So sánh theo cán bộ: công việc phát sinh, đến hạn và quá hạn trong tuần hiện tại</div>
+          <div class="dashChartSub">So sánh theo cán bộ: công việc phát sinh, đến hạn và quá hạn trong tuần hiện tại. Bấm trực tiếp từng thanh để lọc tab Công việc.</div>
         </div>
         <div class="dashLegend">
           <span><i class="lg new"></i>Phát sinh</span>
@@ -360,8 +413,153 @@
     `;
   }
 
+
+  function dashboardReportCompareRows(reports, staff){
+    return staff.map(s=>{
+      const lead=reports.filter(r=>String(r.leadId||"")===String(s.id));
+      const collab=reports.filter(r=>(r.collaborators||[]).map(String).includes(String(s.id)));
+      const late=reports.filter(r=>(String(r.leadId||"")===String(s.id) || (r.collaborators||[]).map(String).includes(String(s.id))) && repDueClass(r)==="rep-overdue");
+      return {
+        id:s.id,
+        name:s.name||s.id,
+        alias:shortStaffName(s.name||s.id, s.id),
+        leadCount:lead.length,
+        collabCount:collab.length,
+        lateCount:late.length,
+        maxValue: Math.max(lead.length, collab.length, late.length)
+      };
+    }).sort((a,b)=> ((b.leadCount+b.collabCount+b.lateCount)-(a.leadCount+a.collabCount+a.lateCount)) || (b.lateCount-a.lateCount) || a.alias.localeCompare(b.alias));
+  }
+
+  function renderReportCompareChart(el, rows){
+    if(!el) return;
+    if(!rows.length){
+      el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu báo cáo để vẽ biểu đồ.</div>`;
+      return;
+    }
+    const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.leadCount, r.collabCount, r.lateCount)));
+    const chartH=Math.max(260, rows.length*74);
+    const pad={top:24,right:26,bottom:40,left:120};
+    const innerW=660;
+    const innerH=chartH-pad.top-pad.bottom;
+    const groupH=innerH/Math.max(1,rows.length);
+    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
+    const gap=5;
+    const colors={lead:'#0f766e', collab:'#2563eb', late:'#dc2626'};
+    const x=(v)=> pad.left + (v/maxVal)*innerW;
+    const yBase=(i)=> pad.top + i*groupH;
+    const ticks=[];
+    for(let i=0;i<=maxVal;i++) ticks.push(i);
+    const grid=ticks.map(v=>{
+      const xv=x(v);
+      return `<g><line x1="${xv}" y1="${pad.top-8}" x2="${xv}" y2="${pad.top+innerH}" stroke="#d7e1dd" stroke-dasharray="4 4"/><text x="${xv}" y="${chartH-14}" text-anchor="middle" font-size="11" fill="#5b6b67">${v}</text></g>`;
+    }).join('');
+    const bars=rows.map((r,i)=>{
+      const y=yBase(i);
+      const lines=[
+        {key:'lead', label:'Đầu mối', value:r.leadCount, y:y+4, mode:'lead'},
+        {key:'collab', label:'Phối hợp', value:r.collabCount, y:y+4+barH+gap, mode:'collab'},
+        {key:'late', label:'Quá hạn', value:r.lateCount, y:y+4+(barH+gap)*2, mode:'late'},
+      ].map(item=>{
+        const width=Math.max(item.value>0 ? 10 : 0, (item.value/maxVal)*innerW);
+        const textX=item.value>0 ? Math.min(pad.left+innerW-8, pad.left+width+8) : pad.left+8;
+        return `
+          <g class="dashBarHot" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="${item.mode}" style="cursor:pointer">
+            <title>${escapeHtml(r.alias)} • ${escapeHtml(item.label)}: ${item.value}</title>
+            <rect x="${pad.left}" y="${item.y}" width="${width}" height="${barH}" rx="6" fill="${colors[item.key]}" opacity="0.92"></rect>
+            <text x="${textX}" y="${item.y+barH-2}" font-size="11" fill="#16312b">${item.value}</text>
+          </g>`;
+      }).join('');
+      return `
+        <g>
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
+          ${lines}
+        </g>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="dashChartHeader">
+        <div>
+          <div class="dashChartTitle">Báo cáo theo cán bộ</div>
+          <div class="dashChartSub">So sánh số lượng báo cáo đầu mối, phối hợp và báo cáo quá hạn. Bấm trực tiếp từng thanh để lọc tab Báo cáo.</div>
+        </div>
+        <div class="dashLegend">
+          <span><i class="lg new"></i>Đầu mối</span>
+          <span><i class="lg collab"></i>Phối hợp</span>
+          <span><i class="lg over"></i>Quá hạn</span>
+        </div>
+      </div>
+      <div class="dashSvgWrap">
+        <svg viewBox="0 0 ${pad.left+innerW+pad.right} ${chartH}" class="dashSvgChart" role="img" aria-label="Biểu đồ báo cáo theo cán bộ">
+          ${grid}
+          ${bars}
+        </svg>
+      </div>
+    `;
+  }
+
+  function dashboardForecastSummaryRows(staff, metrics){
+    return (metrics||[]).map(m=>{
+      let actual=0, weekPlan=0, quarterPlan=0, hasA=false, hasW=false, hasQ=false;
+      for(const s of staff){
+        const row=getFcRow(state.week, s.id, m.key);
+        const a=numOrNull(row.actual), w=numOrNull(row.weekPlan), q=numOrNull(row.quarterPlan);
+        if(a!==null){actual+=a; hasA=true;}
+        if(w!==null){weekPlan+=w; hasW=true;}
+        if(q!==null){quarterPlan+=q; hasQ=true;}
+      }
+      const A=hasA?actual:null, W=hasW?weekPlan:null, Q=hasQ?quarterPlan:null;
+      const progress=(A!==null && Q && Q>0) ? Math.min(100, Math.round(A/Q*100)) : 0;
+      const gap=(A!==null && Q!==null) ? (A-Q) : null;
+      const weekDelta=(A!==null && W!==null) ? (W-A) : null;
+      return {key:m.key,name:m.name||m.key,unit:m.unit||"",A,W,Q,progress,gap,weekDelta};
+    });
+  }
+
+  function renderForecastProgressChart(el, rows){
+    if(!el) return;
+    const data=(rows||[]).filter(r=>r.Q!==null || r.A!==null || r.W!==null);
+    if(!data.length){
+      el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu forecast để vẽ biểu đồ.</div>`;
+      return;
+    }
+    const bars=data.map(r=>{
+      const pctVal=Math.max(0, Math.min(100, Number(r.progress||0)));
+      const gapCls=r.gap!==null && r.gap<0 ? 'neg' : '';
+      return `
+        <div class="dashGaugeRow">
+          <div class="dashGaugeHead">
+            <div>
+              <div class="dashMetricName">${escapeHtml(r.name)}</div>
+              <div class="dashFull">${escapeHtml(r.unit||'')}</div>
+            </div>
+            <div class="dashGaugePct">${pctVal}%</div>
+          </div>
+          <div class="dashGaugeTrack"><div class="dashGaugeFill" style="width:${Math.max(3,pctVal)}%"></div></div>
+          <div class="dashMetricNums">
+            <span class="dashMini">Đã TH: ${r.A===null?'-':fmtNum(r.A)}</span>
+            <span class="dashMini">KH Quý: ${r.Q===null?'-':fmtNum(r.Q)}</span>
+            <span class="dashMini ${gapCls}">GAP Quý: ${r.gap===null?'-':fmtNum(r.gap)}</span>
+          </div>
+        </div>`;
+    }).join('');
+    el.innerHTML = `
+      <div class="dashChartHeader">
+        <div>
+          <div class="dashChartTitle">Tiến độ forecast so với KH quý</div>
+          <div class="dashChartSub">Biểu đồ gauge tổng hợp mức độ hoàn thành kế hoạch quý theo từng chỉ tiêu.</div>
+        </div>
+      </div>
+      <div>${bars}</div>
+    `;
+  }
+
+
   function renderDashboard(){
     const dashTaskCompareChart = $("#dashTaskCompareChart");
+    const dashReportCompareChart = $("#dashReportCompareChart");
+    const dashForecastChart = $("#dashForecastChart");
     const dashCards = $("#dashCards");
     const dashTaskStatus = $("#dashTaskStatus");
     const dashReportSummary = $("#dashReportSummary");
@@ -381,6 +579,7 @@
     const overdueTasks=tasks.filter(t=>isOverdue(t)).length;
 
     renderTaskCompareChart(dashTaskCompareChart, dashboardTaskCompareRows(tasks, staff));
+    renderReportCompareChart(dashReportCompareChart, dashboardReportCompareRows(reports, staff));
 
     dashCards.innerHTML = `
       <div class="card"><div class="k">Tổng việc tuần</div><div class="v">${totalTasks}</div><div class="smallHelp">Tuần ${escapeHtml(fmtDDMMYYYY(state.week))}</div></div>
@@ -412,35 +611,25 @@
     `;
 
     const metrics=(L.forecastMetrics||[]);
-    dashForecastRows.innerHTML = metrics.length ? metrics.map(m=>{
-      let actual=0, weekPlan=0, quarterPlan=0, hasA=false, hasW=false, hasQ=false;
-      for(const s of staff){
-        const row=getFcRow(state.week, s.id, m.key);
-        const a=numOrNull(row.actual), w=numOrNull(row.weekPlan), q=numOrNull(row.quarterPlan);
-        if(a!==null){actual+=a; hasA=true;}
-        if(w!==null){weekPlan+=w; hasW=true;}
-        if(q!==null){quarterPlan+=q; hasQ=true;}
-      }
-      const A=hasA?actual:null, W=hasW?weekPlan:null, Q=hasQ?quarterPlan:null;
-      const progress=(A!==null && Q && Q>0) ? Math.min(100, Math.round(A/Q*100)) : 0;
-      const gap=(A!==null && Q!==null) ? (A-Q) : null;
-      const weekDelta=(A!==null && W!==null) ? (W-A) : null;
+    const forecastRows = dashboardForecastSummaryRows(staff, metrics);
+    renderForecastProgressChart(dashForecastChart, forecastRows);
+    dashForecastRows.innerHTML = forecastRows.length ? forecastRows.map(r=>{
       return `
         <div class="dashMetric">
           <div class="dashMetricHead">
             <div>
-              <div class="dashMetricName">${escapeHtml(m.name||m.key)}</div>
-              <div class="dashFull">${escapeHtml(m.unit||"")}</div>
+              <div class="dashMetricName">${escapeHtml(r.name)}</div>
+              <div class="dashFull">${escapeHtml(r.unit||"")}</div>
             </div>
-            <div class="dashMetricPct">${Q?progress:0}% KH quý</div>
+            <div class="dashMetricPct">${r.Q?r.progress:0}% KH quý</div>
           </div>
-          <div class="dashBarTrack" style="margin-top:10px"><div class="dashBarFill" style="width:${Math.max(4,progress)}%"></div></div>
+          <div class="dashBarTrack" style="margin-top:10px"><div class="dashBarFill" style="width:${Math.max(4,r.progress)}%"></div></div>
           <div class="dashMetricNums">
-            <span class="dashMini">Đã TH: ${A===null?'-':fmtNum(A)}</span>
-            <span class="dashMini">KH Tuần: ${W===null?'-':fmtNum(W)}</span>
-            <span class="dashMini">KH Quý: ${Q===null?'-':fmtNum(Q)}</span>
-            <span class="dashMini ${gap!==null && gap<0 ? 'neg':''}">GAP Quý: ${gap===null?'-':fmtNum(gap)}</span>
-            <span class="dashMini ${weekDelta!==null && weekDelta<0 ? 'neg':''}">Chênh KH Tuần: ${weekDelta===null?'-':fmtNum(weekDelta)}</span>
+            <span class="dashMini">Đã TH: ${r.A===null?'-':fmtNum(r.A)}</span>
+            <span class="dashMini">KH Tuần: ${r.W===null?'-':fmtNum(r.W)}</span>
+            <span class="dashMini">KH Quý: ${r.Q===null?'-':fmtNum(r.Q)}</span>
+            <span class="dashMini ${r.gap!==null && r.gap<0 ? 'neg':''}">GAP Quý: ${r.gap===null?'-':fmtNum(r.gap)}</span>
+            <span class="dashMini ${r.weekDelta!==null && r.weekDelta<0 ? 'neg':''}">Chênh KH Tuần: ${r.weekDelta===null?'-':fmtNum(r.weekDelta)}</span>
           </div>
         </div>`;
     }).join("") : '<div class="dashEmpty">Chưa khai báo forecastMetrics trong Danh mục.</div>';
@@ -683,6 +872,10 @@
     sortDir:"asc",
     repSortField:"deadline",
     repSortDir:"asc",
+    dashboardTaskFilter:"",
+    dashboardTaskStaff:"",
+    dashboardReportMode:"",
+    dashboardReportStaff:"",
     syncing:false,
     timer:null
   };
@@ -696,7 +889,7 @@
   const tbody=$("#tasksTbody");
   const sumTotal=$("#sumTotal"), sumDone=$("#sumDone"), sumOverdue=$("#sumOverdue"), sumPct=$("#sumPct");
   const filterAssignee=$("#filterAssignee"), filterStatus=$("#filterStatus"), filterGroup=$("#filterGroup");
-  const filterOverdue=$("#filterOverdue"), btnClear=$("#btnClearFilter");
+  const filterOverdue=$("#filterOverdue"), btnClear=$("#btnClearFilter"), taskDrillHint=$("#taskDrillHint");
 
   const syncDot=$("#syncDot"), syncText=$("#syncText");
 
@@ -720,7 +913,7 @@
   const repFilterLead=$("#repFilterLead"), repFilterType=$("#repFilterType"), repFilterStatus=$("#repFilterStatus");
   const repOnlyMine=$("#repOnlyMine"), repOnlyDueSoon=$("#repOnlyDueSoon"), btnRepClear=$("#btnRepClear");
   const btnRepAdd=$("#btnRepAdd");
-  const repTbody=$("#repTbody");
+  const repTbody=$("#repTbody"), repDrillHint=$("#repDrillHint");
 
   // Report modal DOM
   const repBackdrop=$("#repBackdrop"), repClose=$("#repClose"), repCancel=$("#repCancel"), repForm=$("#repForm");
@@ -865,6 +1058,11 @@
       if(state.filterStatus && String(t.status)!==String(state.filterStatus)) return false;
       if(state.filterGroup && String(t.group)!==String(state.filterGroup)) return false;
       if(state.onlyOverdue && !isOverdue(t)) return false;
+      if(state.dashboardTaskFilter){
+        if(String(state.dashboardTaskFilter)==="new" && String(t.weekStart||"")!==String(state.week)) return false;
+        if(String(state.dashboardTaskFilter)==="due" && !isDueThisWeekTask(t)) return false;
+        if(String(state.dashboardTaskFilter)==="over" && !isOverdue(t)) return false;
+      }
       return true;
     }).map(t=>{
       const s=staffById(t.ownerId);
@@ -907,6 +1105,17 @@
     sumDone.textContent=String(done);
     sumOverdue.textContent=String(overdue);
     sumPct.textContent= total ? `${Math.round(done/total*100)}%` : "0%";
+
+    if(taskDrillHint){
+      if(state.dashboardTaskFilter && state.dashboardTaskStaff){
+        const label=`Đang lọc từ Dashboard: ${escapeHtml(staffShortById(state.dashboardTaskStaff))} • ${escapeHtml(taskDrillLabel(state.dashboardTaskFilter))}. Bấm “Xoá lọc” để bỏ.`;
+        taskDrillHint.style.display="";
+        taskDrillHint.innerHTML=label;
+      }else{
+        taskDrillHint.style.display="none";
+        taskDrillHint.innerHTML="";
+      }
+    }
 
     if(!vis.length){
       tbody.innerHTML=`<tr><td colspan="8" style="padding:18px;color:#5b6b67">Chưa có công việc trong tuần này. Bấm “+ Thêm việc”.</td></tr>`;
@@ -1179,6 +1388,12 @@
     if(state.repFilterStatus) reps=reps.filter(r=>String(r.status||"")===String(state.repFilterStatus));
     if(state.repOnlyMine) reps=reps.filter(r=>String(r.leadId||"")===me || (r.collaborators||[]).map(String).includes(me) || String(r.createdById||"")===me);
     if(state.repOnlyDueSoon) reps=reps.filter(r=>{const c=repDueClass(r); return c==="rep-duesoon"||c==="rep-overdue";});
+    if(state.dashboardReportMode && state.dashboardReportStaff){
+      const sid=String(state.dashboardReportStaff);
+      if(String(state.dashboardReportMode)==="lead") reps=reps.filter(r=>String(r.leadId||"")===sid);
+      if(String(state.dashboardReportMode)==="collab") reps=reps.filter(r=>(r.collaborators||[]).map(String).includes(sid));
+      if(String(state.dashboardReportMode)==="late") reps=reps.filter(r=>(String(r.leadId||"")===sid || (r.collaborators||[]).map(String).includes(sid)) && repDueClass(r)==="rep-overdue");
+    }
 
     const total=reps.length;
     const done=reps.filter(r=>String(r.status||"")==="Hoàn thành").length;
@@ -1188,6 +1403,16 @@
     repDone.textContent=String(done);
     repDueSoon.textContent=String(dueSoon);
     repOverdue.textContent=String(overdue);
+
+    if(repDrillHint){
+      if(state.dashboardReportMode && state.dashboardReportStaff){
+        repDrillHint.style.display="";
+        repDrillHint.innerHTML=`Đang lọc từ Dashboard: ${escapeHtml(staffShortById(state.dashboardReportStaff))} • ${escapeHtml(reportDrillLabel(state.dashboardReportMode))}. Bấm “Xoá lọc” để bỏ.`;
+      }else{
+        repDrillHint.style.display="none";
+        repDrillHint.innerHTML="";
+      }
+    }
 
     reps.sort((a,b)=>{
       const field = String(state.repSortField||"deadline");
@@ -2591,7 +2816,7 @@ const newLists={
     filterStatus.onchange=()=>{ state.filterStatus=filterStatus.value; renderTasks(); };
     filterGroup.onchange=()=>{ state.filterGroup=filterGroup.value; renderTasks(); };
     filterOverdue.onchange=()=>{ state.onlyOverdue=!!filterOverdue.checked; renderTasks(); };
-    btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; filterOverdue.checked=false; render(); };
+    btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; clearDashboardTaskDrill(); filterOverdue.checked=false; render(); };
 
     btnAdd.onclick=()=>safeOpenAdd();
     btnExport.onclick=()=>exportWeekly();
@@ -2614,6 +2839,29 @@ const newLists={
     document.addEventListener("keydown",(e)=>{ if(e.key==="Escape") closeModals(); });
 
     taskForm.addEventListener("submit", saveTask);
+
+
+    const dashTaskCompareChart = document.getElementById("dashTaskCompareChart");
+    if(dashTaskCompareChart){
+      dashTaskCompareChart.addEventListener("click",(e)=>{
+        const hot=(e.target && e.target.closest) ? e.target.closest("[data-dash-task]") : null;
+        if(!hot) return;
+        const staffId=hot.getAttribute("data-staff") || "";
+        const mode=hot.getAttribute("data-mode") || "";
+        if(staffId && mode) openTasksFromDashboard(staffId, mode);
+      });
+    }
+
+    const dashReportCompareChart = document.getElementById("dashReportCompareChart");
+    if(dashReportCompareChart){
+      dashReportCompareChart.addEventListener("click",(e)=>{
+        const hot=(e.target && e.target.closest) ? e.target.closest("[data-dash-report]") : null;
+        if(!hot) return;
+        const staffId=hot.getAttribute("data-staff") || "";
+        const mode=hot.getAttribute("data-mode") || "";
+        if(staffId && mode) openReportsFromDashboard(staffId, mode);
+      });
+    }
 
     tbody.addEventListener("click",(e)=>{
       const btn=e.target.closest("button"); if(!btn) return;
@@ -2754,7 +3002,7 @@ const newLists={
 
       btnRepClear.onclick=()=>{
         state.repFilterLead=""; state.repFilterType=""; state.repFilterStatus="";
-        state.repOnlyMine=false; state.repOnlyDueSoon=false;
+        state.repOnlyMine=false; state.repOnlyDueSoon=false; clearDashboardReportDrill();
         repFilterLead.value=""; repFilterType.value=""; repFilterStatus.value="";
         repOnlyMine.checked=false; repOnlyDueSoon.checked=false;
         renderReports();
