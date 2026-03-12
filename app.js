@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.4";
+  const VERSION = "6.8.3";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -1014,7 +1014,7 @@
 
     const L=getLists();
     const staff=L.staff||[];
-    fillSelect(elMe, staff, {valueKey:"id", labelFn:s=>shortStaffName(s.name||s.id, s.id), emptyLabel:"-- Chọn --"});
+    fillSelect(elMe, staff, {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
     fillSelect(fmOwner, staff, {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
     fillSelect(filterAssignee, staff, {valueKey:"id", labelFn:s=>s.name, emptyLabel:"-- Lọc theo CB đầu mối --"});
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.8.4">
+  <link rel="stylesheet" href="styles.css?v=6.8.3">
   <style>
     .dashGrid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}
     @media (max-width:900px){.dashGrid2{grid-template-columns:1fr}}
@@ -62,36 +62,6 @@
     .weekPickerWrap input[type="date"]::-webkit-calendar-picker-indicator{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:1;cursor:pointer}
     .weekPickerWrap input[type="date"]::-moz-focus-inner{border:0}
 
-
-    .compact-control{min-width:0}
-    .compact-control select,
-    .compact-control input[type="date"]{width:100%}
-
-    @media (max-width: 720px){
-      .header{display:flex;flex-direction:column;gap:10px}
-      .header .hleft h1{font-size:24px;line-height:1.15;margin-bottom:4px}
-      .header .sub{font-size:14px;line-height:1.35}
-      .header .hright{display:grid !important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;gap:10px !important;align-items:start}
-      .header .hright > *{min-width:0}
-      .header .hright .compact-control{padding:8px 12px !important;border-radius:18px}
-      .header .hright .compact-control label{font-size:11px !important;line-height:1.1;margin-bottom:4px !important;color:#5b6b67}
-      .header .hright .compact-control select,
-      .header .hright .compact-control input[type="date"]{min-width:0 !important;height:38px !important;min-height:38px !important;font-size:15px !important;font-weight:800}
-      .header .hright .compact-control .weekPickerWrap,
-      .header .hright .compact-control .weekPickerWrap input[type="date"]{min-width:0 !important;width:100% !important}
-      .header .hright .compact-control .weekPickerDisplay{font-size:15px !important;inset:0 30px 0 0 !important}
-      .header .hright .pill-week{grid-column:1}
-      .header .hright .pill-me{grid-column:2}
-      .header .hright #btnAdd{grid-column:1 / -1}
-      .header .hright #btnExport{grid-column:1 / -1}
-      .header .hright #btnDashPdf{grid-column:1 / -1}
-      .header .hright #btnLists{grid-column:1}
-      .header .hright .syncBox{grid-column:2;min-width:0}
-      .header .hright .syncTag{width:100%;justify-content:center}
-      .tabsTop{gap:8px;overflow:auto;padding-bottom:2px}
-      .tabsTop .tabBtn{white-space:nowrap}
-    }
-
   </style>
 </head>
 <body>
@@ -100,11 +70,11 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.4)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.3)</span></div>
       </div>
 
       <div class="hright">
-        <div class="pill compact-control pill-week">
+        <div class="pill">
           <label>Tuần</label>
           <div class="weekPickerWrap">
             <span id="weekPickerDisplay" class="weekPickerDisplay">dd/mm/yyyy</span>
@@ -112,7 +82,7 @@
           </div>
         </div>
 
-        <div class="pill compact-control pill-me">
+        <div class="pill">
           <label>Tôi là</label>
           <select id="mePicker"></select>
         </div>
@@ -562,7 +532,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="config.js?v=6.8.4"></script>
-  <script src="app.js?v=6.8.4"></script>
+  <script src="config.js?v=6.8.3"></script>
+  <script src="app.js?v=6.8.3"></script>
 </body>
 </html>
