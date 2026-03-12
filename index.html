@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.8.3">
+  <link rel="stylesheet" href="styles.css?v=6.8.2">
   <style>
     .dashGrid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}
     @media (max-width:900px){.dashGrid2{grid-template-columns:1fr}}
@@ -53,15 +53,6 @@
       .dashSvgChart{min-width:760px}
     }
 
-
-    .weekPickerWrap{position:relative;min-width:170px}
-    .weekPickerWrap input[type="date"]{position:relative;z-index:2;background:transparent;color:transparent;caret-color:transparent;text-shadow:none;min-width:170px}
-    .weekPickerWrap input[type="date"]::-webkit-datetime-edit{color:transparent}
-    .weekPickerWrap input[type="date"]::-webkit-inner-spin-button{display:none}
-    .weekPickerDisplay{position:absolute;inset:0 38px 0 0;display:flex;align-items:center;font-weight:800;color:#0b2230;pointer-events:none;letter-spacing:.2px;white-space:nowrap;z-index:1}
-    .weekPickerWrap input[type="date"]::-webkit-calendar-picker-indicator{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:1;cursor:pointer}
-    .weekPickerWrap input[type="date"]::-moz-focus-inner{border:0}
-
   </style>
 </head>
 <body>
@@ -70,16 +61,13 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.3)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.2)</span></div>
       </div>
 
       <div class="hright">
         <div class="pill">
           <label>Tuần</label>
-          <div class="weekPickerWrap">
-            <span id="weekPickerDisplay" class="weekPickerDisplay">dd/mm/yyyy</span>
-            <input id="weekPicker" type="date"/>
-          </div>
+          <input id="weekPicker" type="date"/>
         </div>
 
         <div class="pill">
@@ -89,7 +77,6 @@
 
         <button class="btn primary" id="btnAdd">+ Thêm việc</button>
         <button class="btn" id="btnExport">Xuất báo cáo tuần</button>
-        <button class="btn" id="btnDashPdf" style="display:none">Xuất PDF Dashboard</button>
         <button class="btn" id="btnLists">Danh mục</button>
 
         <div class="syncBox">
@@ -530,9 +517,7 @@
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="config.js?v=6.8.3"></script>
-  <script src="app.js?v=6.8.3"></script>
+  <script src="config.js?v=6.8.2"></script>
+  <script src="app.js?v=6.8.2"></script>
 </body>
 </html>
