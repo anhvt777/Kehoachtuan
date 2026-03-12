@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.0";
+  const VERSION = "6.8.1";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -66,6 +66,10 @@
   function fmtDDMMYYYY(iso){
     const d=parseISO(iso); if(!d) return "";
     return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`;
+  }
+  function fmtDM(iso){
+    const d=parseISO(iso); if(!d) return "";
+    return `${d.getDate()}/${d.getMonth()+1}`;
   }
 
   function fmtDDMMYYYYHHmm(iso){
@@ -134,6 +138,12 @@
     const d=parseISO(weekStartISO)||mondayOf(new Date());
     const end=new Date(d);
     end.setDate(end.getDate()+5); // Mon->Sat (like sample)
+    return toISO(end);
+  }
+  function dashboardWeekEndISO(weekStartISO){
+    const d=parseISO(weekStartISO)||mondayOf(new Date());
+    const end=new Date(d);
+    end.setDate(end.getDate()+6);
     return toISO(end);
   }
   function today0(){ const t=new Date(); t.setHours(0,0,0,0); return t; }
@@ -258,14 +268,107 @@
     return Math.max(0, Math.round((n/d)*100));
   }
 
+  function dashboardTaskCompareRows(tasks, staff){
+    const weekStart=parseISO(state.week);
+    const weekEnd=parseISO(dashboardWeekEndISO(state.week));
+    return staff.map(s=>{
+      const my=tasks.filter(t=>String(t.ownerId)===String(s.id));
+      const newCount=my.filter(t=>String(t.weekStart||"")===String(state.week)).length;
+      const dueCount=my.filter(t=>{
+        const dl=parseISO(t.deadline);
+        if(!dl || !weekStart || !weekEnd) return false;
+        return dl>=weekStart && dl<=weekEnd && !isDone(t.status);
+      }).length;
+      const overCount=my.filter(t=>isOverdue(t)).length;
+      return {
+        id:s.id,
+        name:s.name||s.id,
+        alias:shortStaffName(s.name||s.id, s.id),
+        newCount,
+        dueCount,
+        overCount,
+        maxValue: Math.max(newCount, dueCount, overCount)
+      };
+    }).sort((a,b)=> ((b.newCount+b.dueCount+b.overCount)-(a.newCount+a.dueCount+a.overCount)) || (b.overCount-a.overCount) || a.alias.localeCompare(b.alias));
+  }
+
+  function renderTaskCompareChart(el, rows){
+    if(!el) return;
+    const weekLabel = `Công việc tuần từ ${fmtDM(state.week)}-${fmtDM(dashboardWeekEndISO(state.week))}`;
+    if(!rows.length){
+      el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu công việc để vẽ biểu đồ.</div>`;
+      return;
+    }
+    const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.newCount, r.dueCount, r.overCount)));
+    const chartH=Math.max(280, rows.length*74);
+    const pad={top:24,right:26,bottom:40,left:120};
+    const innerW=740;
+    const innerH=chartH-pad.top-pad.bottom;
+    const groupH=innerH/Math.max(1,rows.length);
+    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
+    const gap=5;
+    const colors={new:'#0f766e', due:'#f59e0b', over:'#dc2626'};
+    const x=(v)=> pad.left + (v/maxVal)*innerW;
+    const yBase=(i)=> pad.top + i*groupH;
+    const ticks=[];
+    for(let i=0;i<=maxVal;i++){
+      ticks.push(i);
+    }
+    const grid=ticks.map(v=>{
+      const xv=x(v);
+      return `<g><line x1="${xv}" y1="${pad.top-8}" x2="${xv}" y2="${pad.top+innerH}" stroke="#d7e1dd" stroke-dasharray="4 4"/><text x="${xv}" y="${chartH-14}" text-anchor="middle" font-size="11" fill="#5b6b67">${v}</text></g>`;
+    }).join('');
+    const bars=rows.map((r,i)=>{
+      const y=yBase(i);
+      const lines=[
+        {key:'new', label:'Phát sinh', value:r.newCount, y:y+4},
+        {key:'due', label:'Đến hạn', value:r.dueCount, y:y+4+barH+gap},
+        {key:'over', label:'Quá hạn', value:r.overCount, y:y+4+(barH+gap)*2},
+      ].map(item=>{
+        const width=Math.max(item.value>0 ? 10 : 0, (item.value/maxVal)*innerW);
+        const textX=item.value>0 ? Math.min(pad.left+innerW-8, pad.left+width+8) : pad.left+8;
+        return `
+          <rect x="${pad.left}" y="${item.y}" width="${width}" height="${barH}" rx="6" fill="${colors[item.key]}" opacity="0.92"></rect>
+          <text x="${textX}" y="${item.y+barH-2}" font-size="11" fill="#16312b">${item.value}</text>`;
+      }).join('');
+      return `
+        <g>
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
+          ${lines}
+        </g>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="dashChartHeader">
+        <div>
+          <div class="dashChartTitle">${escapeHtml(weekLabel)}</div>
+          <div class="dashChartSub">So sánh theo cán bộ: công việc phát sinh, đến hạn và quá hạn trong tuần hiện tại</div>
+        </div>
+        <div class="dashLegend">
+          <span><i class="lg new"></i>Phát sinh</span>
+          <span><i class="lg due"></i>Đến hạn</span>
+          <span><i class="lg over"></i>Quá hạn</span>
+        </div>
+      </div>
+      <div class="dashSvgWrap">
+        <svg viewBox="0 0 ${pad.left+innerW+pad.right} ${chartH}" class="dashSvgChart" role="img" aria-label="${escapeHtml(weekLabel)}">
+          ${grid}
+          ${bars}
+        </svg>
+      </div>
+    `;
+  }
+
   function renderDashboard(){
+    const dashTaskCompareChart = $("#dashTaskCompareChart");
     const dashCards = $("#dashCards");
     const dashTaskStatus = $("#dashTaskStatus");
     const dashReportSummary = $("#dashReportSummary");
     const dashForecastRows = $("#dashForecastRows");
     const dashStaffTaskBody = $("#dashStaffTaskBody");
     const dashStaffReportBody = $("#dashStaffReportBody");
-    if(!dashCards || !dashTaskStatus || !dashReportSummary || !dashForecastRows || !dashStaffTaskBody || !dashStaffReportBody) return;
+    if(!dashTaskCompareChart || !dashCards || !dashTaskStatus || !dashReportSummary || !dashForecastRows || !dashStaffTaskBody || !dashStaffReportBody) return;
 
     const L=getLists();
     const staff=(L.staff||[]).filter(s=>String(s.id)!=="54000600");
@@ -276,6 +379,8 @@
     const doneTasks=tasks.filter(t=>isDone(t.status)).length;
     const openTasks=tasks.filter(t=>!isDone(t.status)).length;
     const overdueTasks=tasks.filter(t=>isOverdue(t)).length;
+
+    renderTaskCompareChart(dashTaskCompareChart, dashboardTaskCompareRows(tasks, staff));
 
     dashCards.innerHTML = `
       <div class="card"><div class="k">Tổng việc tuần</div><div class="v">${totalTasks}</div><div class="smallHelp">Tuần ${escapeHtml(fmtDDMMYYYY(state.week))}</div></div>

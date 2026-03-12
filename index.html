@@ -26,6 +26,24 @@
     .dashFull{font-size:12px;color:#5b6b67;margin-top:2px}
     .dashEmpty{padding:12px;color:#5b6b67}
     .dashHint{font-size:12px;color:#5b6b67;margin-top:8px}
+  
+    .dashTopChart{margin-bottom:14px}
+    .dashChartHeader{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
+    .dashChartTitle{font-size:22px;font-weight:900;color:#082c35}
+    .dashChartSub{color:#5b6b67;margin-top:4px;font-size:13px}
+    .dashLegend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;color:#21423b;font-weight:700;font-size:13px}
+    .dashLegend span{display:inline-flex;align-items:center;gap:6px}
+    .dashLegend .lg{width:12px;height:12px;border-radius:999px;display:inline-block}
+    .dashLegend .lg.new{background:#0f766e}
+    .dashLegend .lg.due{background:#f59e0b}
+    .dashLegend .lg.over{background:#dc2626}
+    .dashSvgWrap{overflow:auto;padding-bottom:4px}
+    .dashSvgChart{width:100%;min-width:860px;height:auto;display:block}
+    @media (max-width: 720px){
+      .dashChartTitle{font-size:18px}
+      .dashSvgChart{min-width:760px}
+    }
+
   </style>
 </head>
 <body>
@@ -34,7 +52,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.0)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.1)</span></div>
       </div>
 
       <div class="hright">
@@ -72,6 +90,10 @@
       <div class="note">
         <b>Dashboard điều hành nhóm</b>: tổng hợp nhanh công việc tuần, trạng thái công việc, dự kiến số liệu so với kế hoạch quý và tình hình báo cáo theo từng cán bộ.
         Tên cán bộ trong dashboard được rút gọn theo mã hiển thị như <b>AnhVT, AnHT, DungNM, DungNT, AnhTN, TrangLTN</b>.
+      </div>
+
+      <div class="dashPanel dashTopChart">
+        <div id="dashTaskCompareChart"></div>
       </div>
 
       <div class="grid4" id="dashCards"></div>
@@ -476,6 +498,6 @@
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="config.js?v=6.8.0"></script>
-  <script src="app.js?v=6.8.0"></script>
+  <script src="app.js?v=6.8.1"></script>
 </body>
 </html>
