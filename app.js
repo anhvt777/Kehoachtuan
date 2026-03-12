@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.2";
+  const VERSION = "6.8.3";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -176,6 +176,11 @@
     if(n===null||n===undefined||n==="") return "";
     const x=Number(n); if(!Number.isFinite(x)) return "";
     return x.toLocaleString("vi-VN",{maximumFractionDigits:3});
+  }
+
+  function updateWeekPickerDisplay(){
+    if(!weekPickerDisplay) return;
+    weekPickerDisplay.textContent = state && state.week ? fmtDDMMYYYY(state.week) : "dd/mm/yyyy";
   }
 
   function loadJSON(key){ try { return JSON.parse(localStorage.getItem(key)||"null"); } catch { return null; } }
@@ -881,8 +886,8 @@
   };
 
   // ---- DOM ----
-  const elWeek=$("#weekPicker"), elMe=$("#mePicker");
-  const btnAdd=$("#btnAdd"), btnExport=$("#btnExport"), btnLists=$("#btnLists");
+  const elWeek=$("#weekPicker"), elMe=$("#mePicker"), weekPickerDisplay=$("#weekPickerDisplay");
+  const btnAdd=$("#btnAdd"), btnExport=$("#btnExport"), btnDashPdf=$("#btnDashPdf"), btnLists=$("#btnLists");
   const tabDashboard=$("#tabDashboard"), tabTasks=$("#tabTasks"), tabForecast=$("#tabForecast"), tabReports=$("#tabReports");
   const viewDashboard=$("#viewDashboard"), viewTasks=$("#viewTasks"), viewForecast=$("#viewForecast"), viewReports=$("#viewReports");
 
@@ -2545,6 +2550,70 @@ const newLists={
     XLSX.writeFile(wb, `KehoachTuan_${state.week}.xlsx`);
   }
 
+
+  async function exportDashboardPdf(){
+    try{
+      if(typeof html2canvas!=="function" || !(window.jspdf && window.jspdf.jsPDF)){
+        alert("Thiếu thư viện xuất PDF Dashboard. Hãy tải lại trang rồi thử lại.");
+        return;
+      }
+      if(!viewDashboard) return;
+
+      const oldView=state.view;
+      if(oldView!=="dashboard") setView("dashboard");
+
+      const btn = btnDashPdf;
+      const oldText = btn ? btn.textContent : "";
+      if(btn){ btn.disabled=true; btn.textContent="Đang tạo PDF..."; }
+
+      await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,180)));
+
+      const target=viewDashboard;
+      const canvas=await html2canvas(target,{
+        scale:2,
+        useCORS:true,
+        allowTaint:true,
+        backgroundColor:"#f5f7f6",
+        width: Math.max(target.scrollWidth, target.offsetWidth),
+        height: Math.max(target.scrollHeight, target.offsetHeight),
+        windowWidth: Math.max(document.documentElement.clientWidth, target.scrollWidth),
+        windowHeight: Math.max(document.documentElement.clientHeight, target.scrollHeight),
+        scrollX: 0,
+        scrollY: -window.scrollY
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf=new jsPDF("l","mm","a4");
+      const pageWidth=pdf.internal.pageSize.getWidth();
+      const pageHeight=pdf.internal.pageSize.getHeight();
+      const margin=8;
+      const usableWidth=pageWidth-margin*2;
+      const usableHeight=pageHeight-margin*2;
+      const imgData=canvas.toDataURL("image/png");
+      const imgWidth=usableWidth;
+      const imgHeight=canvas.height*imgWidth/canvas.width;
+
+      let heightLeft=imgHeight;
+      let position=margin;
+      pdf.addImage(imgData,"PNG",margin,position,imgWidth,imgHeight,undefined,"FAST");
+      heightLeft -= usableHeight;
+      while(heightLeft>0){
+        position = margin - (imgHeight - heightLeft);
+        pdf.addPage("a4","l");
+        pdf.addImage(imgData,"PNG",margin,position,imgWidth,imgHeight,undefined,"FAST");
+        heightLeft -= usableHeight;
+      }
+      pdf.save(`Dashboard_${state.week}.pdf`);
+
+      if(btn){ btn.disabled=false; btn.textContent=oldText || "Xuất PDF Dashboard"; }
+      if(oldView!=="dashboard") setView(oldView);
+    }catch(e){
+      console.error(e);
+      if(btnDashPdf){ btnDashPdf.disabled=false; btnDashPdf.textContent="Xuất PDF Dashboard"; }
+      alert("Không xuất được PDF Dashboard: " + (e && e.message ? e.message : e));
+    }
+  }
+
   
 
   function fillReportModalSelects(){
@@ -2762,6 +2831,9 @@ const newLists={
       btnAdd.style.display = isDash ? "none" : "";
       btnAdd.title = isRep ? (isManager(state.meId) ? "Giao báo cáo" : "Chỉ quản lý mới giao báo cáo.") : "Thêm công việc";
     }
+    if(btnDashPdf){
+      btnDashPdf.style.display = name==="dashboard" ? "" : "none";
+    }
     render();
   }
 
@@ -2801,6 +2873,7 @@ const newLists={
     elWeek.onchange=()=>{
       state.week = pickWeekStartISO(elWeek.value);
       elWeek.value = state.week;
+      updateWeekPickerDisplay();
       syncAll();
     };
 
@@ -2820,6 +2893,7 @@ const newLists={
 
     btnAdd.onclick=()=>safeOpenAdd();
     btnExport.onclick=()=>exportWeekly();
+    if(btnDashPdf) btnDashPdf.onclick=()=>exportDashboardPdf();
     btnLists.onclick=()=>openLists();
 
     // Safety: delegate click in case header button is overlaid / re-rendered
@@ -3067,6 +3141,7 @@ const newLists={
 
   function init(){
     elWeek.value = state.week;
+    updateWeekPickerDisplay();
     refreshDropdowns();
     setupTimer();
     wire();
