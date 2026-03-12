@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.4";
+  const VERSION = "6.8.5";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -354,14 +354,15 @@
       el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu công việc để vẽ biểu đồ.</div>`;
       return;
     }
+    const mobile = window.matchMedia("(max-width: 720px)").matches;
     const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.newCount, r.dueCount, r.overCount)));
-    const chartH=Math.max(280, rows.length*74);
-    const pad={top:24,right:26,bottom:40,left:120};
-    const innerW=740;
+    const chartH=Math.max(mobile ? 220 : 280, rows.length*(mobile ? 62 : 74));
+    const pad=mobile ? {top:18,right:18,bottom:34,left:78} : {top:24,right:26,bottom:40,left:120};
+    const innerW=mobile ? 430 : 740;
     const innerH=chartH-pad.top-pad.bottom;
     const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
-    const gap=5;
+    const barH=Math.max(10, Math.min(mobile ? 14 : 16, (groupH-(mobile ? 14 : 18))/3));
+    const gap=mobile ? 4 : 5;
     const colors={new:'#0f766e', due:'#f59e0b', over:'#dc2626'};
     const x=(v)=> pad.left + (v/maxVal)*innerW;
     const yBase=(i)=> pad.top + i*groupH;
@@ -391,8 +392,8 @@
       }).join('');
       return `
         <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="${mobile ? 12 : 13}" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          ${mobile ? '' : `<text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>`}
           ${lines}
         </g>`;
     }).join('');
@@ -442,14 +443,15 @@
       el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu báo cáo để vẽ biểu đồ.</div>`;
       return;
     }
+    const mobile = window.matchMedia("(max-width: 720px)").matches;
     const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.leadCount, r.collabCount, r.lateCount)));
-    const chartH=Math.max(260, rows.length*74);
-    const pad={top:24,right:26,bottom:40,left:120};
-    const innerW=660;
+    const chartH=Math.max(mobile ? 220 : 260, rows.length*(mobile ? 62 : 74));
+    const pad=mobile ? {top:18,right:18,bottom:34,left:78} : {top:24,right:26,bottom:40,left:120};
+    const innerW=mobile ? 390 : 660;
     const innerH=chartH-pad.top-pad.bottom;
     const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
-    const gap=5;
+    const barH=Math.max(10, Math.min(mobile ? 14 : 16, (groupH-(mobile ? 14 : 18))/3));
+    const gap=mobile ? 4 : 5;
     const colors={lead:'#0f766e', collab:'#2563eb', late:'#dc2626'};
     const x=(v)=> pad.left + (v/maxVal)*innerW;
     const yBase=(i)=> pad.top + i*groupH;
@@ -477,8 +479,8 @@
       }).join('');
       return `
         <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="${mobile ? 12 : 13}" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          ${mobile ? '' : `<text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>`}
           ${lines}
         </g>`;
     }).join('');
@@ -2833,6 +2835,11 @@ const newLists={
     }
     if(btnDashPdf){
       btnDashPdf.style.display = name==="dashboard" ? "" : "none";
+    }
+    if(btnAdd && window.matchMedia("(max-width: 720px)").matches){
+      btnAdd.style.display = name==="dashboard" ? "none" : "";
+    } else if(btnAdd){
+      btnAdd.style.display = "";
     }
     render();
   }

@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.8.4">
+  <link rel="stylesheet" href="styles.css?v=6.8.5">
   <style>
     .dashGrid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}
     @media (max-width:900px){.dashGrid2{grid-template-columns:1fr}}
@@ -92,6 +92,66 @@
       .tabsTop .tabBtn{white-space:nowrap}
     }
 
+
+    html,body{max-width:100%;overflow-x:hidden}
+    body{overscroll-behavior-x:none}
+    .container{max-width:1200px;margin:0 auto;padding:12px;overflow-x:hidden}
+    .topbar{position:sticky;top:0;z-index:30;background:linear-gradient(180deg, rgba(243,247,246,.98), rgba(243,247,246,.95));backdrop-filter:saturate(120%) blur(6px);margin:-12px -12px 12px;padding:12px 12px 10px;border-bottom:1px solid #dfe8e4}
+    .tableScroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+    .tableScroll > table{width:100%}
+    #viewDashboard .tableScroll table{min-width:620px}
+    .dashSvgWrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+    .dashSvgChart{display:block;height:auto}
+    .dashPanel,.tableWrap,.note,.card{max-width:100%}
+
+    @media (max-width: 720px){
+      .container{padding:10px}
+      .topbar{margin:-10px -10px 10px;padding:10px 10px 8px}
+      .header{gap:8px;margin-bottom:8px}
+      .header .hleft h1{font-size:17px !important;line-height:1.15;margin-bottom:2px}
+      .header .sub{font-size:11px !important;line-height:1.25;margin-top:2px}
+      .header .hright{display:grid !important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;gap:8px !important;width:100%}
+      .header .hright .pill,
+      .header .hright .btn,
+      .header .hright .syncBox{min-width:0;width:100%}
+      .header .hright .compact-control{padding:7px 10px !important;border-radius:16px !important}
+      .header .hright .compact-control label{font-size:10px !important;margin-bottom:2px !important}
+      .header .hright .compact-control select,
+      .header .hright .compact-control input[type="date"]{height:34px !important;min-height:34px !important;font-size:13px !important;font-weight:800}
+      .header .hright .compact-control .weekPickerDisplay{font-size:13px !important}
+      .header .hright .pill-week{grid-column:1}
+      .header .hright .pill-me{grid-column:2}
+      .header .hright #btnExport{grid-column:1}
+      .header .hright #btnDashPdf{grid-column:2}
+      .header .hright #btnLists{grid-column:1}
+      .header .hright .syncBox{grid-column:2}
+      .header .hright #btnAdd{grid-column:1 / -1;padding:9px 10px !important;font-size:13px !important;min-height:38px}
+      .header .hright #btnExport,
+      .header .hright #btnDashPdf,
+      .header .hright #btnLists{padding:9px 10px !important;font-size:12px !important;min-height:38px;white-space:nowrap}
+      .header .hright .syncTag{padding:7px 8px !important;font-size:11px !important;line-height:1.15;justify-content:center;text-align:center;min-height:38px;border-radius:16px}
+      .tabsTop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;overflow:visible;padding-bottom:0}
+      .tabsTop .tabBtn{min-width:0;white-space:normal;padding:8px 4px;font-size:12px;line-height:1.15;text-align:center;border-radius:14px}
+      .note{padding:10px 11px;font-size:12px;line-height:1.35}
+      .grid4{gap:8px;margin:10px 0}
+      .card{padding:10px 12px;border-radius:14px}
+      .card .v{font-size:22px}
+      .filters{gap:8px}
+      .filters select,.chk,.btn.ghost{width:100%;min-width:0}
+      .dashGrid2{gap:10px;margin-top:10px}
+      .dashPanel{padding:11px;border-radius:16px}
+      .dashPanel h3{font-size:15px;margin-bottom:8px}
+      .dashChartTitle{font-size:16px !important;line-height:1.2}
+      .dashChartSub{font-size:12px !important;line-height:1.35}
+      .dashLegend{gap:10px;font-size:12px}
+      .dashMetricName{font-size:14px}
+      .dashGaugePct,.dashMetricPct{font-size:14px}
+      #viewDashboard .tableScroll table{min-width:560px}
+      #viewTasks .tableScroll table,
+      #viewReports .tableScroll table,
+      #viewForecast .tableScroll table{min-width:860px}
+    }
+
   </style>
 </head>
 <body>
@@ -100,7 +160,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.4)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.5)</span></div>
       </div>
 
       <div class="hright">
