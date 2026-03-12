@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.5.1";
+  const VERSION = "6.7.0";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -320,6 +320,43 @@
       }
     }
     return {ok:false};
+  }
+
+  function mergeStaffRows(baseArr, extraArr){
+    const byId = new Map();
+    for(const item of [...(baseArr||[]), ...(extraArr||[])]){
+      const id = String((item && item.id) || "").trim();
+      if(!id) continue;
+      const old = byId.get(id) || {};
+      byId.set(id, {
+        ...old,
+        ...item,
+        id,
+        name: String((item && item.name) || old.name || id),
+        emailBidv: String((item && item.emailBidv) || old.emailBidv || ""),
+        emailGmail: String((item && item.emailGmail) || old.emailGmail || ""),
+        notifyEmail: String((item && item.notifyEmail) || old.notifyEmail || (item && item.emailBidv) || (item && item.emailGmail) || ""),
+        notifySource: String((item && item.notifySource) || old.notifySource || "")
+      });
+    }
+    return Array.from(byId.values());
+  }
+
+  function sanitizeListsPayload(raw){
+    const current = getLists();
+    const src = (raw && typeof raw === "object") ? raw : {};
+    return {
+      staff: Array.isArray(src.staff) ? mergeStaffRows(current.staff||[], src.staff||[]) : (current.staff||[]),
+      groups: Array.isArray(src.groups) && src.groups.length ? src.groups.map(String) : (current.groups||[]),
+      statuses: Array.isArray(src.statuses) && src.statuses.length ? src.statuses.map(String) : (current.statuses||[]),
+      priorities: Array.isArray(src.priorities) && src.priorities.length ? src.priorities.map(String) : (current.priorities||[]),
+      kpis: Array.isArray(src.kpis) && src.kpis.length ? src.kpis.map(String) : (current.kpis||[]),
+      outputMetrics: Array.isArray(src.outputMetrics) && src.outputMetrics.length ? src.outputMetrics.map(String) : (current.outputMetrics||[]),
+      forecastMetrics: Array.isArray(src.forecastMetrics) && src.forecastMetrics.length ? src.forecastMetrics : (current.forecastMetrics||[]),
+      reportTypes: Array.isArray(src.reportTypes) && src.reportTypes.length ? src.reportTypes.map(String) : (current.reportTypes||[]),
+      reportStatuses: Array.isArray(src.reportStatuses) && src.reportStatuses.length ? src.reportStatuses.map(String) : (current.reportStatuses||[]),
+      updatedAt: String(src.updatedAt || src.updated_at || "")
+    };
   }
 
   // ---- State ----
@@ -1138,7 +1175,9 @@
     if(String(s.storageMode||"local")!=="supabase") return;
     if(!sbBase() || !s.supabaseAnonKey) return;
     try{
-      const rows=await fetch(sbUrl("reports?select=*"), {method:"GET", headers:sbHeaders()}).then(r=>r.json());
+      const res = await fetch(sbUrl("reports?select=*"), {method:"GET", headers:sbHeaders()});
+      if(!res.ok) throw new Error("load reports failed " + res.status);
+      const rows=await res.json();
       state.reports=(rows||[]).map(r=>({
         id: String(r.id),
         createdAt: r.created_at || "",
@@ -1149,8 +1188,8 @@
         createdById: r.created_by_id || "",
         status: r.status || "Chưa bắt đầu",
         note: r.note || "",
-        collaborators: r.collaborators || [],
-        parts: r.parts || {}
+        collaborators: Array.isArray(r.collaborators) ? r.collaborators : [],
+        parts: (r.parts && typeof r.parts === "object") ? r.parts : {}
       }));
       saveJSON("KHT_REPORTS", state.reports);
     }catch(e){
@@ -1162,7 +1201,8 @@
     const s=getSettings();
     if(String(s.storageMode||"local")!=="supabase") return;
     if(!sbBase() || !s.supabaseAnonKey) return;
-    const payload=[{
+
+    const payload={
       id: String(rep.id),
       created_at: rep.createdAt || new Date().toISOString(),
       type: rep.type,
@@ -1175,11 +1215,55 @@
       collaborators: rep.collaborators || [],
       parts: rep.parts || {},
       updated_at: new Date().toISOString()
-    }];
-    const headers = sbHeaders();
-    headers["Prefer"] = "return=representation,resolution=merge-duplicates";
-    const res = await fetch(sbUrl("reports?on_conflict=id"), {method:"POST", headers, body: JSON.stringify(payload)});
-    if(!res.ok) throw new Error("save report failed " + res.status);
+    };
+
+    let res;
+    let bodyText = "";
+
+    try{
+      const headers = sbHeaders();
+      headers["Prefer"] = "return=representation,resolution=merge-duplicates";
+      res = await fetch(sbUrl("reports?on_conflict=id"), {method:"POST", headers, body: JSON.stringify([payload])});
+      if(res.ok) return;
+      bodyText = await res.text().catch(()=>"");
+    }catch(e){
+      bodyText = String(e && e.message ? e.message : e || "");
+    }
+
+    try{
+      const headers = sbHeaders();
+      headers["Prefer"] = "return=representation";
+      res = await fetch(sbUrl(`reports?id=eq.${encodeURIComponent(String(rep.id))}`), {method:"PATCH", headers, body: JSON.stringify(payload)});
+      if(res.ok){
+        const rows = await res.json().catch(()=>[]);
+        if(Array.isArray(rows) && rows.length) return;
+      }else{
+        bodyText = await res.text().catch(()=>bodyText);
+      }
+    }catch(e){
+      bodyText = String(e && e.message ? e.message : e || bodyText);
+    }
+
+    try{
+      const headers = sbHeaders();
+      headers["Prefer"] = "return=representation";
+      res = await fetch(sbUrl("reports"), {method:"POST", headers, body: JSON.stringify([payload])});
+      if(res.ok) return;
+      bodyText = await res.text().catch(()=>bodyText);
+    }catch(e){
+      bodyText = String(e && e.message ? e.message : e || bodyText);
+    }
+
+    throw new Error(bodyText || "save report failed");
+  }
+
+  async function persistReport(rep, options={}){
+    const opts = options || {};
+    const i=(state.reports||[]).findIndex(r=>String(r.id)===String(rep.id));
+    if(i>=0) state.reports[i]=rep; else state.reports.push(rep);
+    saveJSON("KHT_REPORTS", state.reports);
+    if(opts.skipRemote) return;
+    await saveReportToSupabase(rep);
   }
 
   async function loadStaffDirectoryFromSupabase(){
@@ -1258,18 +1342,16 @@
     const s=getSettings();
     if(String(s.storageMode||"local")!=="supabase") return;
     if(!sbBase() || !s.supabaseAnonKey) return;
-    const remote = await sbReadJSONConfig("lists_v6");
-    if(!remote || typeof remote !== "object") return;
-    const merged = {...getLists(), ...remote};
-    if(Array.isArray(merged.staff) && merged.staff.length){
-      const seen=new Set();
-      merged.staff = merged.staff.filter(x=>{
-        const id=String((x&&x.id)||"").trim();
-        if(!id || seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      });
-    }
+    const remoteRaw = await sbReadJSONConfig("lists_v6");
+    if(!remoteRaw || typeof remoteRaw !== "object") return;
+    const current = getLists();
+    const remote = sanitizeListsPayload(remoteRaw);
+    const merged = {
+      ...current,
+      ...remote,
+      staff: mergeStaffRows(current.staff||[], remote.staff||[]),
+      updatedAt: String(remote.updatedAt || current.updatedAt || "")
+    };
     saveJSON(KEY_LISTS, merged);
   }
 
@@ -1277,7 +1359,8 @@
     const s=getSettings();
     if(String(s.storageMode||"local")!=="supabase") return {ok:false, skipped:true};
     if(!sbBase() || !s.supabaseAnonKey) return {ok:false, skipped:true};
-    return await sbWriteJSONConfig("lists_v6", listsObj);
+    const payload = sanitizeListsPayload({...listsObj, updatedAt: new Date().toISOString()});
+    return await sbWriteJSONConfig("lists_v6", payload);
   }
 
 async function syncAll(){
@@ -1659,7 +1742,8 @@ const newLists={
       outputMetrics: read1(metricList),
       forecastMetrics: readFcKpis(),
       reportTypes: repTypeList ? read1(repTypeList) : (getLists().reportTypes||[]),
-      reportStatuses: repStatusList ? read1(repStatusList) : (getLists().reportStatuses||[])
+      reportStatuses: repStatusList ? read1(repStatusList) : (getLists().reportStatuses||[]),
+      updatedAt: new Date().toISOString()
     };
     saveJSON(KEY_LISTS, newLists);
 
@@ -1695,6 +1779,9 @@ const newLists={
     }
     if(listsSyncResult && listsSyncResult.ok && !listsSyncResult.skipped){
       console.info("Đã đồng bộ danh mục lên Supabase");
+    } else if(String(newS.storageMode||"") === "supabase"){
+      console.warn("Chưa đồng bộ được danh mục lên Supabase", listsSyncResult);
+      alert("Danh mục chưa đồng bộ lên Supabase. Hãy chạy SQL tạo bảng app_config rồi bấm Lưu danh mục lại.");
     }
   }
 
@@ -2002,12 +2089,23 @@ const newLists={
       btn.textContent=(String(p.status)==="Done")?"Đã hoàn thành":"Chưa xong";
       const canToggle = isManager(state.meId) || String(state.meId)===String(id);
       btn.disabled=!canToggle;
-      btn.onclick=()=>{
+      btn.onclick=async()=>{
         rep.parts=rep.parts||{};
         const cur=rep.parts[String(id)]||{status:"Pending"};
         const next=(String(cur.status)==="Done")?"Pending":"Done";
         rep.parts[String(id)]={...cur,status:next,updatedAt:new Date().toISOString()};
+        repBackdrop._repObj = rep;
         renderPartsBox(rep);
+        if(rep.id){
+          try{
+            await persistReport(rep);
+            mark(true, "supabase • báo cáo đã lưu");
+          }catch(e){
+            console.error(e);
+            mark(false, "lỗi lưu báo cáo");
+            alert("Không lưu được trạng thái phối hợp báo cáo. " + (e && e.message ? e.message : e));
+          }
+        }
       };
       right.appendChild(btn);
       row.appendChild(left); row.appendChild(right);
@@ -2052,7 +2150,8 @@ const newLists={
     repDeadline.disabled=!manager;
     repLead.disabled=!manager;
     Array.from(repCollabPick.querySelectorAll(".chipItem")).forEach(ch=>ch.style.pointerEvents = manager ? "auto":"none");
-    repNote.disabled = !(manager || isLead(obj) || isCollaborator(obj));
+    const canEditReport = manager || isLead(obj) || isCollaborator(obj) || String(obj.createdById||"")===me;
+    repNote.disabled = !canEditReport;
     repStatus.disabled = !(manager || String(obj.leadId||"")===me);
 
     openModal(repBackdrop);
@@ -2063,6 +2162,11 @@ const newLists={
     if(!obj) return closeModals();
     const manager=isManager(state.meId);
     const me=String(state.meId||"");
+    const canEditReport = manager || isLead(obj) || isCollaborator(obj) || String(obj.createdById||"")===me;
+    if(!canEditReport && obj.id){
+      alert("Bạn không có quyền cập nhật báo cáo này.");
+      return;
+    }
 
     if(manager){
       obj.type=String(repType.value||"").trim();
@@ -2073,7 +2177,6 @@ const newLists={
     }
     obj.note=String(repNote.value||"");
 
-    // validate required
     if(manager){
       if(!obj.type || !obj.name || !obj.deadline || !obj.leadId){
         alert("Vui lòng nhập đủ: Loại báo cáo, Tên báo cáo, Deadline, CB đầu mối.");
@@ -2081,7 +2184,6 @@ const newLists={
       }
     }
 
-    // ensure parts
     obj.parts=obj.parts||{};
     (obj.collaborators||[]).forEach(id=>{
       if(!obj.parts[String(id)]) obj.parts[String(id)]={status:"Pending",updatedAt:""};
@@ -2090,7 +2192,6 @@ const newLists={
       if(!(obj.collaborators||[]).map(String).includes(String(k))) delete obj.parts[k];
     }
 
-    // status rules
     const next=String(repStatus.value||obj.status||"");
     if(next==="Hoàn thành" && !(manager)){
       if(!allCollabsDone(obj)){
@@ -2098,24 +2199,26 @@ const newLists={
         return;
       }
       obj.status="Hoàn thành";
-    }else{
+    }else if(manager || String(obj.leadId||"")===me){
       obj.status=next;
     }
 
-    // id
     if(!obj.id){
       const maxId=Math.max(0,...(state.reports||[]).map(r=>Number(r.id)||0));
       obj.id=String(maxId+1);
       obj.createdById=me;
     }
 
-    const i=(state.reports||[]).findIndex(r=>String(r.id)===String(obj.id));
-    if(i>=0) state.reports[i]=obj; else state.reports.push(obj);
-    saveJSON("KHT_REPORTS", state.reports);
-    try{ await saveReportToSupabase(obj); }catch(e){ console.error(e); }
-
-    closeModals();
-    renderReports();
+    try{
+      await persistReport(obj);
+      closeModals();
+      renderReports();
+      mark(true, "supabase • báo cáo đã lưu");
+    }catch(e){
+      console.error(e);
+      mark(false, "lỗi lưu báo cáo");
+      PLACEHOLDER
+    }
   }
 // ---- View switch ----
   function setView(name){

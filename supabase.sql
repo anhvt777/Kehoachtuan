@@ -1,48 +1,94 @@
--- Kehoachtuan Supabase schema v6.1.0
--- Run in Supabase SQL Editor. Safe to re-run.
+-- v6.7 patch: đồng bộ danh mục + cho phép cập nhật báo cáo từ web anon key
 
-create extension if not exists "uuid-ossp";
+-- 1) app_config: lưu danh mục dùng chung giữa desktop/mobile
+create table if not exists public.app_config (
+  config_key text primary key,
+  config_value jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
 
-create table if not exists public.tasks (
+alter table public.app_config enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='app_config' and policyname='app_config_select_anon'
+  ) then
+    create policy app_config_select_anon on public.app_config for select to anon using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='app_config' and policyname='app_config_insert_anon'
+  ) then
+    create policy app_config_insert_anon on public.app_config for insert to anon with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='app_config' and policyname='app_config_update_anon'
+  ) then
+    create policy app_config_update_anon on public.app_config for update to anon using (true) with check (true);
+  end if;
+end $$;
+
+create index if not exists idx_app_config_updated_at on public.app_config(updated_at desc);
+
+-- 2) reports: bảo đảm web anon key có quyền đọc/ghi/cập nhật báo cáo
+create table if not exists public.reports (
   id text primary key,
-  seq bigint,
-  week_start date not null,
-  group_name text,
-  title text,
-  deadline date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  type text,
+  name text,
+  deadline timestamptz,
+  lead_id text,
+  created_by_id text,
   status text,
-  priority text,
-  kpi text,
-  metric text,
-  commit numeric,
-  actual numeric,
-  carry_over text,
-  owner_id text,
-  owner_name text,
   note text,
-  assigned_by_id text,
-  assigned_by_name text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  collaborators jsonb not null default '[]'::jsonb,
+  parts jsonb not null default '{}'::jsonb
 );
 
-create index if not exists tasks_week_start_idx on public.tasks(week_start);
-create index if not exists tasks_updated_idx on public.tasks(updated_at);
+-- nếu bảng đã có rồi thì chỉ thêm cột nào còn thiếu
+alter table public.reports add column if not exists created_at timestamptz not null default now();
+alter table public.reports add column if not exists updated_at timestamptz not null default now();
+alter table public.reports add column if not exists type text;
+alter table public.reports add column if not exists name text;
+alter table public.reports add column if not exists deadline timestamptz;
+alter table public.reports add column if not exists lead_id text;
+alter table public.reports add column if not exists created_by_id text;
+alter table public.reports add column if not exists status text;
+alter table public.reports add column if not exists note text;
+alter table public.reports add column if not exists collaborators jsonb not null default '[]'::jsonb;
+alter table public.reports add column if not exists parts jsonb not null default '{}'::jsonb;
 
-create table if not exists public.weekly_forecast (
-  id uuid primary key default uuid_generate_v4(),
-  week_start date not null,
-  staff_id text not null,
-  metric_key text not null,
-  actual numeric,
-  quarter_plan numeric,
-  week_plan numeric,
-  note text,
-  updated_by_id text,
-  updated_by_name text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+alter table public.reports enable row level security;
 
-create unique index if not exists weekly_forecast_uniq on public.weekly_forecast(week_start, staff_id, metric_key);
-create index if not exists weekly_forecast_week_idx on public.weekly_forecast(week_start);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='reports' and policyname='reports_select_anon'
+  ) then
+    create policy reports_select_anon on public.reports for select to anon using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='reports' and policyname='reports_insert_anon'
+  ) then
+    create policy reports_insert_anon on public.reports for insert to anon with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='reports' and policyname='reports_update_anon'
+  ) then
+    create policy reports_update_anon on public.reports for update to anon using (true) with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies where schemaname='public' and tablename='reports' and policyname='reports_delete_anon'
+  ) then
+    create policy reports_delete_anon on public.reports for delete to anon using (true);
+  end if;
+end $$;
+
+create index if not exists idx_reports_deadline on public.reports(deadline);
+create index if not exists idx_reports_updated_at on public.reports(updated_at desc);
