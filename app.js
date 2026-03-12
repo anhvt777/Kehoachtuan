@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.6";
+  const VERSION = "6.8.7";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -356,20 +356,70 @@
     }
     const mobile = window.matchMedia("(max-width: 720px)").matches;
     const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.newCount, r.dueCount, r.overCount)));
-    const chartH=Math.max(mobile ? 220 : 280, rows.length*(mobile ? 62 : 74));
-    const pad=mobile ? {top:18,right:18,bottom:34,left:78} : {top:24,right:26,bottom:40,left:120};
-    const innerW=mobile ? 430 : 740;
+
+    if(mobile){
+      const list=rows.map(r=>{
+        const wNew=Math.max(0, (r.newCount/maxVal)*100);
+        const wDue=Math.max(0, (r.dueCount/maxVal)*100);
+        const wOver=Math.max(0, (r.overCount/maxVal)*100);
+        return `
+          <div class="dashCompareItem">
+            <div class="dashCompareHead">
+              <div>
+                <div class="dashAlias">${escapeHtml(r.alias)}</div>
+                <div class="dashFull">${escapeHtml(r.name)}</div>
+              </div>
+              <div class="dashCompareTotal">${r.newCount+r.dueCount+r.overCount}</div>
+            </div>
+            <div class="dashCompareLines">
+              <button type="button" class="dashCompareBtn" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="new">
+                <span class="dashCompareLbl"><i class="lg new"></i>Phát sinh</span>
+                <span class="dashCompareNum">${r.newCount}</span>
+              </button>
+              <div class="dashCompareTrack"><div class="dashCompareFill fill-new" style="width:${wNew}%"></div></div>
+
+              <button type="button" class="dashCompareBtn" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="due">
+                <span class="dashCompareLbl"><i class="lg due"></i>Đến hạn</span>
+                <span class="dashCompareNum">${r.dueCount}</span>
+              </button>
+              <div class="dashCompareTrack"><div class="dashCompareFill fill-due" style="width:${wDue}%"></div></div>
+
+              <button type="button" class="dashCompareBtn" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="over">
+                <span class="dashCompareLbl"><i class="lg over"></i>Quá hạn</span>
+                <span class="dashCompareNum">${r.overCount}</span>
+              </button>
+              <div class="dashCompareTrack"><div class="dashCompareFill fill-over" style="width:${wOver}%"></div></div>
+            </div>
+          </div>`;
+      }).join('');
+      el.innerHTML = `
+        <div class="dashChartHeader">
+          <div>
+            <div class="dashChartTitle">${escapeHtml(weekLabel)}</div>
+            <div class="dashChartSub">So sánh theo cán bộ: công việc phát sinh, đến hạn và quá hạn trong tuần hiện tại. Bấm từng dòng để lọc tab Công việc.</div>
+          </div>
+          <div class="dashLegend">
+            <span><i class="lg new"></i>Phát sinh</span>
+            <span><i class="lg due"></i>Đến hạn</span>
+            <span><i class="lg over"></i>Quá hạn</span>
+          </div>
+        </div>
+        <div class="dashCompareList">${list}</div>`;
+      return;
+    }
+
+    const chartH=Math.max(280, rows.length*74);
+    const pad={top:24,right:26,bottom:40,left:120};
+    const innerW=740;
     const innerH=chartH-pad.top-pad.bottom;
     const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(mobile ? 14 : 16, (groupH-(mobile ? 14 : 18))/3));
-    const gap=mobile ? 4 : 5;
+    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
+    const gap=5;
     const colors={new:'#0f766e', due:'#f59e0b', over:'#dc2626'};
     const x=(v)=> pad.left + (v/maxVal)*innerW;
     const yBase=(i)=> pad.top + i*groupH;
     const ticks=[];
-    for(let i=0;i<=maxVal;i++){
-      ticks.push(i);
-    }
+    for(let i=0;i<=maxVal;i++) ticks.push(i);
     const grid=ticks.map(v=>{
       const xv=x(v);
       return `<g><line x1="${xv}" y1="${pad.top-8}" x2="${xv}" y2="${pad.top+innerH}" stroke="#d7e1dd" stroke-dasharray="4 4"/><text x="${xv}" y="${chartH-14}" text-anchor="middle" font-size="11" fill="#5b6b67">${v}</text></g>`;
@@ -392,8 +442,8 @@
       }).join('');
       return `
         <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="${mobile ? 12 : 13}" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          ${mobile ? '' : `<text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>`}
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
           ${lines}
         </g>`;
     }).join('');
@@ -445,13 +495,65 @@
     }
     const mobile = window.matchMedia("(max-width: 720px)").matches;
     const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.leadCount, r.collabCount, r.lateCount)));
-    const chartH=Math.max(mobile ? 220 : 260, rows.length*(mobile ? 62 : 74));
-    const pad=mobile ? {top:18,right:18,bottom:34,left:78} : {top:24,right:26,bottom:40,left:120};
-    const innerW=mobile ? 390 : 660;
+
+    if(mobile){
+      const list=rows.map(r=>{
+        const wLead=Math.max(0,(r.leadCount/maxVal)*100);
+        const wCollab=Math.max(0,(r.collabCount/maxVal)*100);
+        const wLate=Math.max(0,(r.lateCount/maxVal)*100);
+        return `
+          <div class="dashCompareItem">
+            <div class="dashCompareHead">
+              <div>
+                <div class="dashAlias">${escapeHtml(r.alias)}</div>
+                <div class="dashFull">${escapeHtml(r.name)}</div>
+              </div>
+              <div class="dashCompareTotal">${r.leadCount+r.collabCount+r.lateCount}</div>
+            </div>
+            <div class="dashCompareLines">
+              <button type="button" class="dashCompareBtn" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="lead">
+                <span class="dashCompareLbl"><i class="lg new"></i>Đầu mối</span>
+                <span class="dashCompareNum">${r.leadCount}</span>
+              </button>
+              <div class="dashCompareTrack"><div class="dashCompareFill fill-new" style="width:${wLead}%"></div></div>
+
+              <button type="button" class="dashCompareBtn" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="collab">
+                <span class="dashCompareLbl"><i class="lg collab"></i>Phối hợp</span>
+                <span class="dashCompareNum">${r.collabCount}</span>
+              </button>
+              <div class="dashCompareTrack"><div class="dashCompareFill fill-collab" style="width:${wCollab}%"></div></div>
+
+              <button type="button" class="dashCompareBtn" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="late">
+                <span class="dashCompareLbl"><i class="lg over"></i>Quá hạn</span>
+                <span class="dashCompareNum">${r.lateCount}</span>
+              </button>
+              <div class="dashCompareTrack"><div class="dashCompareFill fill-over" style="width:${wLate}%"></div></div>
+            </div>
+          </div>`;
+      }).join('');
+      el.innerHTML = `
+        <div class="dashChartHeader">
+          <div>
+            <div class="dashChartTitle">Báo cáo theo cán bộ</div>
+            <div class="dashChartSub">So sánh số lượng báo cáo đầu mối, phối hợp và quá hạn. Bấm từng dòng để lọc tab Báo cáo.</div>
+          </div>
+          <div class="dashLegend">
+            <span><i class="lg new"></i>Đầu mối</span>
+            <span><i class="lg collab"></i>Phối hợp</span>
+            <span><i class="lg over"></i>Quá hạn</span>
+          </div>
+        </div>
+        <div class="dashCompareList">${list}</div>`;
+      return;
+    }
+
+    const chartH=Math.max(260, rows.length*74);
+    const pad={top:24,right:26,bottom:40,left:120};
+    const innerW=660;
     const innerH=chartH-pad.top-pad.bottom;
     const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(mobile ? 14 : 16, (groupH-(mobile ? 14 : 18))/3));
-    const gap=mobile ? 4 : 5;
+    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
+    const gap=5;
     const colors={lead:'#0f766e', collab:'#2563eb', late:'#dc2626'};
     const x=(v)=> pad.left + (v/maxVal)*innerW;
     const yBase=(i)=> pad.top + i*groupH;
@@ -479,8 +581,8 @@
       }).join('');
       return `
         <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="${mobile ? 12 : 13}" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          ${mobile ? '' : `<text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>`}
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
           ${lines}
         </g>`;
     }).join('');

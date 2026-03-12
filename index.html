@@ -6,6 +6,26 @@
   <title>Theo dõi & Phân công công việc</title>
   <link rel="stylesheet" href="styles.css?v=6.8.6">
   <style>
+
+    *,*::before,*::after{box-sizing:border-box}
+    html{-webkit-text-size-adjust:100%;text-size-adjust:100%;max-width:100%;overflow-x:hidden}
+    body{max-width:100%;overflow-x:hidden}
+    img,svg,canvas{max-width:100%;height:auto}
+    section{max-width:100%;overflow-x:hidden}
+    .dashCompareList{display:grid;gap:10px}
+    .dashCompareItem{border:1px solid #e7ece9;border-radius:14px;padding:10px;background:#fbfcfb}
+    .dashCompareHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px}
+    .dashCompareTotal{min-width:30px;text-align:right;font-size:18px;font-weight:900;color:#0b2b26}
+    .dashCompareLines{display:grid;gap:6px}
+    .dashCompareBtn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:0;border:none;background:transparent;color:#16312b;font:inherit}
+    .dashCompareLbl{display:inline-flex;align-items:center;gap:7px;font-weight:800;font-size:13px;min-width:0}
+    .dashCompareNum{font-weight:900;font-size:13px;flex:0 0 auto}
+    .dashCompareTrack{height:9px;background:#edf2ef;border-radius:999px;overflow:hidden}
+    .dashCompareFill{height:100%;border-radius:999px}
+    .dashCompareFill.fill-new{background:#0f766e}
+    .dashCompareFill.fill-due{background:#f59e0b}
+    .dashCompareFill.fill-over{background:#dc2626}
+    .dashCompareFill.fill-collab{background:#2563eb}
     .dashGrid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}
     @media (max-width:900px){.dashGrid2{grid-template-columns:1fr}}
     .dashPanel{background:#fff;border:1px solid #e7ece9;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(12,40,28,.05)}
@@ -153,7 +173,7 @@
     }
 
 
-    /* ---- v6.8.6 mobile hardening ---- */
+    /* ---- v6.8.7 mobile hardening ---- */
     .topbar{position:-webkit-sticky;position:sticky;top:0;z-index:120;will-change:transform}
     .viewPad{max-width:100%}
     @media (max-width: 960px){
@@ -324,6 +344,59 @@
       .note{border-radius:16px}
     }
 
+
+
+    /* ---- v6.8.7 mobile final hardening ---- */
+    @media (max-width: 720px){
+      .container,.viewPad,#viewDashboard,#viewTasks,#viewReports,#viewForecast{width:100%;max-width:100%;overflow-x:hidden !important}
+      .dashSvgWrap,.tableWrap,.tableScroll{max-width:100%;overflow-x:hidden !important}
+      .dashSvgChart{min-width:0 !important;width:100% !important}
+      .dashGrid2{display:block !important}
+      .dashGrid2 > .dashPanel{margin-bottom:10px}
+      .dashCompareItem{padding:10px}
+      .dashCompareTotal{font-size:16px}
+      .dashMetricNums{gap:6px}
+      .dashMini{font-size:11px;padding:4px 7px}
+      #viewTasks .tableScroll table,
+      #viewReports .tableScroll table{min-width:0 !important;width:100% !important;table-layout:fixed}
+      #viewTasks tbody tr,
+      #viewReports tbody tr{display:block;width:100%;max-width:100%;margin-bottom:12px;background:#fff}
+      #viewTasks tbody td,
+      #viewReports tbody td{grid-template-columns:minmax(0,1fr) !important;gap:6px !important;padding:9px 12px !important;font-size:14px !important;line-height:1.35 !important;overflow:hidden}
+      #viewTasks tbody td::before,
+      #viewReports tbody td::before{font-size:11px !important;line-height:1.25 !important;margin-bottom:0 !important}
+      #viewTasks tbody td > *,
+      #viewReports tbody td > *{min-width:0;max-width:100%}
+      #viewTasks tbody td[data-label="Công việc / Hoạt động"] > div:first-child,
+      #viewReports tbody td[data-label="Báo cáo"] > div:first-child{font-size:16px !important;line-height:1.25 !important;font-weight:800 !important;white-space:normal !important;overflow-wrap:anywhere !important;word-break:break-word !important}
+      #viewTasks tbody td[data-label="Công việc / Hoạt động"] > div:last-child,
+      #viewReports tbody td[data-label="Báo cáo"] .smallHelp{font-size:12px !important;line-height:1.35 !important;white-space:normal !important;overflow-wrap:anywhere !important;word-break:break-word !important;color:#5b6b67 !important}
+      #viewTasks tbody td[data-label="CB đầu mối"],
+      #viewTasks tbody td[data-label="Trạng thái"],
+      #viewTasks tbody td[data-label="Deadline"],
+      #viewReports tbody td[data-label="Đầu mối"],
+      #viewReports tbody td[data-label="Phối hợp"],
+      #viewReports tbody td[data-label="Trạng thái"],
+      #viewReports tbody td[data-label="Deadline"],
+      #viewReports tbody td[data-label="Tiến độ phối hợp"]{font-size:15px !important;font-weight:700}
+      #viewTasks tbody td[data-label="Tác vụ"],
+      #viewReports tbody td[data-label="Tác vụ"]{display:block !important}
+      #viewTasks tbody td[data-label="Tác vụ"]::before,
+      #viewReports tbody td[data-label="Tác vụ"]::before{display:block !important;margin-bottom:8px !important}
+      #viewTasks tbody td[data-label="Tác vụ"] .btn-mini,
+      #viewReports tbody td[data-label="Tác vụ"] .btn-mini{display:inline-flex !important;align-items:center;justify-content:center;min-width:88px;min-height:38px;padding:0 12px !important;margin:0 8px 8px 0 !important;border-radius:14px !important;border:1px solid #ced9d4 !important;background:#ffffff !important;color:#0b2b26 !important;font-size:13px !important;font-weight:800 !important;line-height:1 !important;box-shadow:none !important}
+      #viewTasks tbody td[data-label="Tác vụ"] .btn-mini.danger,
+      #viewReports tbody td[data-label="Tác vụ"] .btn-mini.danger{background:#fff3f2 !important;border-color:#f0c1bc !important;color:#b33b2e !important}
+      #viewTasks tbody td[data-label="Tác vụ"] .btn-mini[disabled],
+      #viewReports tbody td[data-label="Tác vụ"] .btn-mini[disabled]{opacity:.55 !important;color:#7a8b86 !important;background:#f4f7f5 !important}
+      #viewTasks .note,
+      #viewReports .note,
+      #viewDashboard .note{font-size:12px !important;line-height:1.35}
+      #viewDashboard .dashPanel{overflow:hidden}
+      #viewDashboard .dashPanel .tableScroll{overflow-x:auto !important}
+      .mobileAddFab{display:flex;align-items:center;justify-content:center}
+    }
+
   </style>
 </head>
 <body>
@@ -332,7 +405,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.6)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.7)</span></div>
       </div>
 
       <div class="hright">
@@ -795,7 +868,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="config.js?v=6.8.6"></script>
-  <script src="app.js?v=6.8.6"></script>
+  <script src="config.js?v=6.8.7"></script>
+  <script src="app.js?v=6.8.7"></script>
 </body>
 </html>
