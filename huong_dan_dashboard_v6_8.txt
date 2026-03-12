@@ -1,0 +1,48 @@
+HƯỚNG DẪN CẬP NHẬT TAB DASHBOARD v6.8
+
+1. Tải 2 file:
+- index_v6_8_dashboard.html
+- app_v6_8_dashboard.js
+
+2. Backup file cũ trong project:
+- index.html
+- app.js
+
+3. Đổi tên file mới:
+- index_v6_8_dashboard.html -> index.html
+- app_v6_8_dashboard.js -> app.js
+
+4. Upload đè 2 file lên GitHub Pages / host đang dùng.
+
+5. Sau khi upload xong:
+- Máy tính: bấm Ctrl + F5
+- Điện thoại: đóng tab cũ, mở lại trang
+
+6. Kiểm tra nhanh:
+- Có tab mới tên Dashboard ở đầu hàng tab
+- Vào Dashboard thấy 4 ô tóm tắt công việc tuần
+- Có phần "Dự kiến số liệu so với kế hoạch quý"
+- Có 2 bảng: "Công việc theo cán bộ" và "Báo cáo theo cán bộ"
+
+7. Quy tắc thống kê của Dashboard:
+- Công việc: lấy theo tuần đang chọn + việc carry over chưa hoàn thành
+- Trạng thái công việc: đếm theo danh mục trạng thái hiện có
+- Forecast: cộng tổng Actual / KH Tuần / KH Quý của tất cả cán bộ
+- Báo cáo: đếm toàn bộ báo cáo hiện có trong hệ thống
+- Tên cán bộ trên Dashboard được rút gọn như:
+  + Vo Tuan Anh -> AnhVT
+  + Hoang Truong An -> AnHT
+  + Nguyen Mai Dung -> DungNM
+  + Nguyen Thuy Dung -> DungNT
+  + Tran Nam Anh -> AnhTN
+  + Le Thi Ngoc Trang -> TrangLTN
+
+8. Nếu Dashboard không hiện dữ liệu:
+- Kiểm tra đã chọn đúng tuần chưa
+- Kiểm tra đã chọn Storage = supabase chưa nếu muốn dữ liệu đồng bộ giữa các thiết bị
+- Kiểm tra trong Danh mục đã khai báo forecastMetrics chưa
+- Hard refresh lại trang một lần nữa
+
+9. Nếu vẫn lỗi:
+- Mở F12 > Console trên máy tính
+- Chụp ảnh lỗi gửi lại để kiểm tra tiếp

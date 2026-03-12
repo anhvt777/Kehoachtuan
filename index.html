@@ -4,7 +4,29 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.6.0">
+  <link rel="stylesheet" href="styles.css?v=6.8.0">
+  <style>
+    .dashGrid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}
+    @media (max-width:900px){.dashGrid2{grid-template-columns:1fr}}
+    .dashPanel{background:#fff;border:1px solid #e7ece9;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(12,40,28,.05)}
+    .dashPanel h3{margin:0 0 10px;font-size:16px}
+    .dashBarRow{display:grid;grid-template-columns:160px 1fr 48px;align-items:center;gap:10px;margin:10px 0}
+    .dashBarLabel{font-weight:700;color:#24332d;font-size:13px}
+    .dashBarValue{font-weight:800;text-align:right}
+    .dashBarTrack{height:10px;background:#edf2ef;border-radius:999px;overflow:hidden}
+    .dashBarFill{height:100%;background:linear-gradient(90deg,#1d8f6a,#5bc595);border-radius:999px}
+    .dashMetric{padding:12px;border:1px solid #eef2ef;border-radius:14px;background:#fbfcfb;margin:10px 0}
+    .dashMetricHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+    .dashMetricName{font-weight:900;font-size:15px}
+    .dashMetricPct{font-weight:900;color:#116b4f}
+    .dashMetricNums{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .dashMini{padding:4px 8px;border-radius:999px;background:#f2f7f4;font-size:12px;font-weight:800;color:#32433c}
+    .dashMini.neg{background:#fff2f1;color:#b33b2e}
+    .dashAlias{font-weight:900}
+    .dashFull{font-size:12px;color:#5b6b67;margin-top:2px}
+    .dashEmpty{padding:12px;color:#5b6b67}
+    .dashHint{font-size:12px;color:#5b6b67;margin-top:8px}
+  </style>
 </head>
 <body>
   <div class="container">
@@ -12,7 +34,7 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.6.0)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.0)</span></div>
       </div>
 
       <div class="hright">
@@ -37,14 +59,87 @@
     </div>
 
     <div class="tabsTop">
-      <button class="tabBtn active" id="tabTasks">Công việc</button>
+      <button class="tabBtn active" id="tabDashboard">Dashboard</button>
+      <button class="tabBtn" id="tabTasks">Công việc</button>
       <button class="tabBtn" id="tabForecast">Dự kiến số liệu</button>
       <button class="tabBtn" id="tabReports">Báo cáo</button>
     </div>
   </div>
 
+
+    <!-- DASHBOARD VIEW -->
+    <section id="viewDashboard">
+      <div class="note">
+        <b>Dashboard điều hành nhóm</b>: tổng hợp nhanh công việc tuần, trạng thái công việc, dự kiến số liệu so với kế hoạch quý và tình hình báo cáo theo từng cán bộ.
+        Tên cán bộ trong dashboard được rút gọn theo mã hiển thị như <b>AnhVT, AnHT, DungNM, DungNT, AnhTN, TrangLTN</b>.
+      </div>
+
+      <div class="grid4" id="dashCards"></div>
+
+      <div class="dashGrid2">
+        <div class="dashPanel">
+          <h3>Phân bổ trạng thái công việc</h3>
+          <div id="dashTaskStatus"></div>
+        </div>
+        <div class="dashPanel">
+          <h3>Tổng quan báo cáo</h3>
+          <div id="dashReportSummary"></div>
+        </div>
+      </div>
+
+      <div class="dashPanel" style="margin-top:14px">
+        <h3>Dự kiến số liệu so với kế hoạch quý</h3>
+        <div id="dashForecastRows"></div>
+      </div>
+
+      <div class="dashGrid2">
+        <div class="dashPanel">
+          <h3>Công việc theo cán bộ</h3>
+          <div class="tableWrap" style="margin-top:8px">
+            <div class="tableScroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cán bộ</th>
+                    <th>Tổng việc</th>
+                    <th>Done</th>
+                    <th>Đang mở</th>
+                    <th>Quá hạn</th>
+                    <th>Tỷ lệ</th>
+                  </tr>
+                </thead>
+                <tbody id="dashStaffTaskBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashPanel">
+          <h3>Báo cáo theo cán bộ</h3>
+          <div class="tableWrap" style="margin-top:8px">
+            <div class="tableScroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cán bộ</th>
+                    <th>Đầu mối</th>
+                    <th>ĐM xong</th>
+                    <th>ĐM quá hạn</th>
+                    <th>Phối hợp</th>
+                    <th>PH xong</th>
+                    <th>Tỷ lệ</th>
+                  </tr>
+                </thead>
+                <tbody id="dashStaffReportBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- TASKS VIEW -->
-    <section id="viewTasks">
+    <section id="viewTasks" style="display:none">
       <div class="grid4">
         <div class="card"><div class="k">Tổng việc</div><div class="v" id="sumTotal">0</div></div>
         <div class="card"><div class="k">Hoàn thành</div><div class="v" id="sumDone">0</div></div>
@@ -380,7 +475,7 @@
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js?v=6.7.0"></script>
-  <script src="app.js?v=6.7.0"></script>
+  <script src="config.js?v=6.8.0"></script>
+  <script src="app.js?v=6.8.0"></script>
 </body>
 </html>

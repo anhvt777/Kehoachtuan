@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.7.0";
+  const VERSION = "6.8.0";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -205,6 +205,198 @@
     return (CFG.managerIds||[]).map(String).includes(String(meId||""));
   }
 
+
+  const STAFF_ALIAS_MAP = {
+    "vo tuan anh": "AnhVT",
+    "hoang truong an": "AnHT",
+    "nguyen mai dung": "DungNM",
+    "nguyen thuy dung": "DungNT",
+    "tran nam anh": "AnhTN",
+    "le thi ngoc trang": "TrangLTN"
+  };
+
+  function normalizeNameKey(s){
+    return String(s||"")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d").replace(/Đ/g, "D")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+
+  function shortStaffName(name, fallbackId=""){
+    const key = normalizeNameKey(name);
+    if(STAFF_ALIAS_MAP[key]) return STAFF_ALIAS_MAP[key];
+    if(!name) return String(fallbackId||"");
+    return String(name);
+  }
+
+  function staffShortById(id){
+    const s = staffById(id) || {};
+    return shortStaffName(s.name || id, id);
+  }
+
+  function dashboardTasksBase(){
+    const week=state.week;
+    return (state.tasks||[]).filter(t=>{
+      if(t.weekStart===week) return true;
+      if(t.weekStart && t.weekStart<week && String(t.carryOver||"Y").toUpperCase()==="Y" && !isDone(t.status)) return true;
+      return false;
+    }).map(t=>{
+      const s=staffById(t.ownerId);
+      return {...t, ownerName: s? s.name : (t.ownerName||t.ownerId)};
+    });
+  }
+
+  function dashboardReportRows(){
+    return [...(state.reports||[])];
+  }
+
+  function pct(n,d){
+    if(!d || !Number.isFinite(n) || !Number.isFinite(d)) return 0;
+    return Math.max(0, Math.round((n/d)*100));
+  }
+
+  function renderDashboard(){
+    const dashCards = $("#dashCards");
+    const dashTaskStatus = $("#dashTaskStatus");
+    const dashReportSummary = $("#dashReportSummary");
+    const dashForecastRows = $("#dashForecastRows");
+    const dashStaffTaskBody = $("#dashStaffTaskBody");
+    const dashStaffReportBody = $("#dashStaffReportBody");
+    if(!dashCards || !dashTaskStatus || !dashReportSummary || !dashForecastRows || !dashStaffTaskBody || !dashStaffReportBody) return;
+
+    const L=getLists();
+    const staff=(L.staff||[]).filter(s=>String(s.id)!=="54000600");
+    const tasks=dashboardTasksBase();
+    const reports=dashboardReportRows();
+
+    const totalTasks=tasks.length;
+    const doneTasks=tasks.filter(t=>isDone(t.status)).length;
+    const openTasks=tasks.filter(t=>!isDone(t.status)).length;
+    const overdueTasks=tasks.filter(t=>isOverdue(t)).length;
+
+    dashCards.innerHTML = `
+      <div class="card"><div class="k">Tổng việc tuần</div><div class="v">${totalTasks}</div><div class="smallHelp">Tuần ${escapeHtml(fmtDDMMYYYY(state.week))}</div></div>
+      <div class="card"><div class="k">Hoàn thành</div><div class="v">${doneTasks}</div><div class="smallHelp">Tỷ lệ ${totalTasks?Math.round(doneTasks/totalTasks*100):0}%</div></div>
+      <div class="card"><div class="k">Đang mở</div><div class="v">${openTasks}</div><div class="smallHelp">Chưa hoàn thành</div></div>
+      <div class="card"><div class="k">Quá hạn</div><div class="v">${overdueTasks}</div><div class="smallHelp">Cần ưu tiên xử lý</div></div>
+    `;
+
+    const statuses=(L.statuses&&L.statuses.length?L.statuses:["Not started","Doing","Done","Blocked"]);
+    const maxStatus=Math.max(1, ...statuses.map(st=>tasks.filter(t=>String(t.status||"")===String(st)).length));
+    dashTaskStatus.innerHTML = statuses.map(st=>{
+      const count=tasks.filter(t=>String(t.status||"")===String(st)).length;
+      const w=Math.max(4, Math.round(count/maxStatus*100));
+      return `<div class="dashBarRow"><div class="dashBarLabel">${escapeHtml(st)}</div><div class="dashBarTrack"><div class="dashBarFill" style="width:${w}%"></div></div><div class="dashBarValue">${count}</div></div>`;
+    }).join("") || '<div class="dashEmpty">Chưa có trạng thái công việc.</div>';
+
+    const repDone=reports.filter(r=>String(r.status||"")==="Hoàn thành").length;
+    const repDueSoon=reports.filter(r=>repDueClass(r)==="rep-duesoon").length;
+    const repOver=reports.filter(r=>repDueClass(r)==="rep-overdue").length;
+    const repOpen=reports.length-repDone;
+    dashReportSummary.innerHTML = `
+      <div class="grid4">
+        <div class="card"><div class="k">Tổng báo cáo</div><div class="v">${reports.length}</div></div>
+        <div class="card"><div class="k">Hoàn thành</div><div class="v">${repDone}</div></div>
+        <div class="card"><div class="k">Đang mở</div><div class="v">${repOpen}</div></div>
+        <div class="card"><div class="k">Quá hạn / Sắp hạn</div><div class="v">${repOver} / ${repDueSoon}</div></div>
+      </div>
+      <div class="dashHint">Thống kê báo cáo lấy từ toàn bộ dữ liệu hiện có, không phụ thuộc bộ lọc của tab Báo cáo.</div>
+    `;
+
+    const metrics=(L.forecastMetrics||[]);
+    dashForecastRows.innerHTML = metrics.length ? metrics.map(m=>{
+      let actual=0, weekPlan=0, quarterPlan=0, hasA=false, hasW=false, hasQ=false;
+      for(const s of staff){
+        const row=getFcRow(state.week, s.id, m.key);
+        const a=numOrNull(row.actual), w=numOrNull(row.weekPlan), q=numOrNull(row.quarterPlan);
+        if(a!==null){actual+=a; hasA=true;}
+        if(w!==null){weekPlan+=w; hasW=true;}
+        if(q!==null){quarterPlan+=q; hasQ=true;}
+      }
+      const A=hasA?actual:null, W=hasW?weekPlan:null, Q=hasQ?quarterPlan:null;
+      const progress=(A!==null && Q && Q>0) ? Math.min(100, Math.round(A/Q*100)) : 0;
+      const gap=(A!==null && Q!==null) ? (A-Q) : null;
+      const weekDelta=(A!==null && W!==null) ? (W-A) : null;
+      return `
+        <div class="dashMetric">
+          <div class="dashMetricHead">
+            <div>
+              <div class="dashMetricName">${escapeHtml(m.name||m.key)}</div>
+              <div class="dashFull">${escapeHtml(m.unit||"")}</div>
+            </div>
+            <div class="dashMetricPct">${Q?progress:0}% KH quý</div>
+          </div>
+          <div class="dashBarTrack" style="margin-top:10px"><div class="dashBarFill" style="width:${Math.max(4,progress)}%"></div></div>
+          <div class="dashMetricNums">
+            <span class="dashMini">Đã TH: ${A===null?'-':fmtNum(A)}</span>
+            <span class="dashMini">KH Tuần: ${W===null?'-':fmtNum(W)}</span>
+            <span class="dashMini">KH Quý: ${Q===null?'-':fmtNum(Q)}</span>
+            <span class="dashMini ${gap!==null && gap<0 ? 'neg':''}">GAP Quý: ${gap===null?'-':fmtNum(gap)}</span>
+            <span class="dashMini ${weekDelta!==null && weekDelta<0 ? 'neg':''}">Chênh KH Tuần: ${weekDelta===null?'-':fmtNum(weekDelta)}</span>
+          </div>
+        </div>`;
+    }).join("") : '<div class="dashEmpty">Chưa khai báo forecastMetrics trong Danh mục.</div>';
+
+    const taskRows = staff.map(s=>{
+      const my=tasks.filter(t=>String(t.ownerId)===String(s.id));
+      const total=my.length;
+      const done=my.filter(t=>isDone(t.status)).length;
+      const over=my.filter(t=>isOverdue(t)).length;
+      const open=total-done;
+      return {
+        id:s.id,
+        name:s.name||s.id,
+        alias:shortStaffName(s.name||s.id, s.id),
+        total, done, open, over, rate: total?Math.round(done/total*100):0
+      };
+    }).sort((a,b)=> (b.total-a.total) || (b.over-a.over) || a.alias.localeCompare(b.alias));
+
+    dashStaffTaskBody.innerHTML = taskRows.length ? taskRows.map(r=>`
+      <tr>
+        <td><div class="dashAlias">${escapeHtml(r.alias)}</div><div class="dashFull">${escapeHtml(r.name)}</div></td>
+        <td>${r.total}</td>
+        <td>${r.done}</td>
+        <td>${r.open}</td>
+        <td>${r.over}</td>
+        <td>${r.rate}%</td>
+      </tr>`).join("") : '<tr><td colspan="6" class="dashEmpty">Chưa có dữ liệu công việc.</td></tr>';
+
+    const reportRows = staff.map(s=>{
+      const lead=reports.filter(r=>String(r.leadId||"")===String(s.id));
+      const collab=reports.filter(r=>(r.collaborators||[]).map(String).includes(String(s.id)));
+      const leadDone=lead.filter(r=>String(r.status||"")==="Hoàn thành").length;
+      const leadOver=lead.filter(r=>repDueClass(r)==="rep-overdue").length;
+      const collabDone=collab.filter(r=>String(((r.parts||{})[String(s.id)]||{}).status||"")==="Done").length;
+      const totalResp=lead.length+collab.length;
+      const score=totalResp?Math.round(((leadDone+collabDone)/totalResp)*100):0;
+      return {
+        id:s.id,
+        name:s.name||s.id,
+        alias:shortStaffName(s.name||s.id, s.id),
+        leadTotal:lead.length,
+        leadDone,
+        leadOver,
+        collabTotal:collab.length,
+        collabDone,
+        score
+      };
+    }).sort((a,b)=> ((b.leadTotal+b.collabTotal)-(a.leadTotal+a.collabTotal)) || (b.leadOver-a.leadOver) || a.alias.localeCompare(b.alias));
+
+    dashStaffReportBody.innerHTML = reportRows.length ? reportRows.map(r=>`
+      <tr>
+        <td><div class="dashAlias">${escapeHtml(r.alias)}</div><div class="dashFull">${escapeHtml(r.name)}</div></td>
+        <td>${r.leadTotal}</td>
+        <td>${r.leadDone}</td>
+        <td>${r.leadOver}</td>
+        <td>${r.collabTotal}</td>
+        <td>${r.collabDone}</td>
+        <td>${r.score}%</td>
+      </tr>`).join("") : '<tr><td colspan="7" class="dashEmpty">Chưa có dữ liệu báo cáo.</td></tr>';
+  }
+
   
   // ---- Task permissions ----
   // Rule:
@@ -365,7 +557,7 @@
     week: pickWeekStartISO(toISO(new Date())),
     meId:"",
     prefillOwner:"",
-    view:"tasks",
+    view:"dashboard",
     filterAssignee:"",
     filterStatus:"",
     filterGroup:"",
@@ -393,8 +585,8 @@
   // ---- DOM ----
   const elWeek=$("#weekPicker"), elMe=$("#mePicker");
   const btnAdd=$("#btnAdd"), btnExport=$("#btnExport"), btnLists=$("#btnLists");
-  const tabTasks=$("#tabTasks"), tabForecast=$("#tabForecast"), tabReports=$("#tabReports");
-  const viewTasks=$("#viewTasks"), viewForecast=$("#viewForecast"), viewReports=$("#viewReports");
+  const tabDashboard=$("#tabDashboard"), tabTasks=$("#tabTasks"), tabForecast=$("#tabForecast"), tabReports=$("#tabReports");
+  const viewDashboard=$("#viewDashboard"), viewTasks=$("#viewTasks"), viewForecast=$("#viewForecast"), viewReports=$("#viewReports");
 
   const tbody=$("#tasksTbody");
   const sumTotal=$("#sumTotal"), sumDone=$("#sumDone"), sumOverdue=$("#sumOverdue"), sumPct=$("#sumPct");
@@ -1428,13 +1620,14 @@ async function syncAll(){
 
   // Prefill assignee when manager assigns from Forecast
   state.prefillOwnerId = "";
-function safeOpenTask(task){
+  function safeOpenTask(task){
     try{
       openTask(task);
     }catch(err){
       console.error(err);
       alert("Lỗi mở form: " + (err?.message || err));
     }
+  }
 
   function safeOpenReport(rep){
     try{
@@ -1446,15 +1639,13 @@ function safeOpenTask(task){
   }
 
   function safeOpenAdd(){
-    // Contextual add button: tasks vs reports
     if(state.view==="reports"){
-      if(!state.meId) return alert("Bạn cần chọn ô \"Tôi là\" (Võ Tuấn Anh) để giao báo cáo.");
-        if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
+      if(!state.meId) return alert("Bạn cần chọn ô Tôi là để giao báo cáo.");
+      if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
       return safeOpenReport(null);
     }
+    if(state.view==="dashboard") return safeOpenTask(null);
     return safeOpenTask(null);
-  }
-
   }
 
   function openTask(task){
@@ -2217,44 +2408,47 @@ const newLists={
     }catch(e){
       console.error(e);
       mark(false, "lỗi lưu báo cáo");
-      PLACEHOLDER
+      alert("Lưu báo cáo thất bại. Kiểm tra quyền bảng reports trên Supabase rồi thử lại.");
     }
   }
 // ---- View switch ----
   function setView(name){
     state.view=name;
+    if(tabDashboard) tabDashboard.classList.toggle("active", name==="dashboard");
     tabTasks.classList.toggle("active", name==="tasks");
     tabForecast.classList.toggle("active", name==="forecast");
     if(tabReports) tabReports.classList.toggle("active", name==="reports");
 
+    if(viewDashboard) viewDashboard.style.display = name==="dashboard" ? "" : "none";
     viewTasks.style.display = name==="tasks" ? "" : "none";
     viewForecast.style.display = name==="forecast" ? "" : "none";
     if(viewReports) viewReports.style.display = name==="reports" ? "" : "none";
 
-    // Update top-bar Add button label by view
     if(btnAdd){
       const isRep = name==="reports";
+      const isDash = name==="dashboard";
       btnAdd.textContent = isRep ? "+ Thêm báo cáo" : "+ Thêm việc";
-      // Keep button clickable; permission handled in safeOpenAdd for clearer UX
       btnAdd.disabled = false;
-      btnAdd.title = isRep ? (isManager(state.meId) ? "Giao báo cáo" : "Chỉ quản lý mới giao báo cáo. Hãy chọn ô \"Tôi là\" = Võ Tuấn Anh.") : "Thêm công việc";
+      btnAdd.style.display = isDash ? "none" : "";
+      btnAdd.title = isRep ? (isManager(state.meId) ? "Giao báo cáo" : "Chỉ quản lý mới giao báo cáo.") : "Thêm công việc";
     }
     render();
   }
 
   function render(){
     refreshDropdowns();
-    if(state.view==="reports") renderReports();
+    if(state.view==="dashboard") renderDashboard();
     if(state.view==="tasks") renderTasks();
     if(state.view==="forecast") renderForecastCards();
-    if(state.view==="reports" && typeof renderReports==="function") renderReports();
-    }
+    if(state.view==="reports") renderReports();
+  }
 
   
   // ---- Add button shim (fix ReferenceError: safeOpenAdd is not defined) ----
   // Some previous builds had scope issues; keep this shim in the same scope as wire().
   function safeOpenAdd(){
     try{
+      if(state.view==="dashboard") return openTask(null);
       if(state.view==="reports"){
         if(!state.meId) return alert("Bạn cần chọn ô \"Tôi là\" (Võ Tuấn Anh) để giao báo cáo.");
         if(!isManager(state.meId)) return alert("Chỉ quản lý mới giao báo cáo.");
@@ -2269,6 +2463,7 @@ const newLists={
 
 // ---- Event wiring ----
   function wire(){
+    if(tabDashboard) tabDashboard.onclick=()=>setView("dashboard");
     tabTasks.onclick=()=>setView("tasks");
     tabForecast.onclick=()=>setView("forecast");
     if(tabReports) tabReports.onclick=()=>setView("reports");
@@ -2520,11 +2715,9 @@ const newLists={
   function init(){
     elWeek.value = state.week;
     refreshDropdowns();
-    renderReports();
-    renderForecastCards();
     setupTimer();
     wire();
-
+    setView(state.view || "dashboard");
     syncAll();
   }
 
