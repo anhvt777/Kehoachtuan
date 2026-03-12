@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.7";
+  const VERSION = "6.8.8";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -252,6 +252,10 @@
     return shortStaffName(s.name || id, id);
   }
 
+  function dashboardStaffList(){
+    return (getLists().staff||[]).filter(s => String(s.id)!=="54000600" && !isManager(s.id));
+  }
+
   function dashboardTasksBase(){
     const week=state.week;
     return (state.tasks||[]).filter(t=>{
@@ -351,108 +355,38 @@
     if(!el) return;
     const weekLabel = `Công việc tuần từ ${fmtDM(state.week)}-${fmtDM(dashboardWeekEndISO(state.week))}`;
     if(!rows.length){
-      el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu công việc để vẽ biểu đồ.</div>`;
+      el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu công việc để so sánh.</div>`;
       return;
     }
-    const mobile = window.matchMedia("(max-width: 720px)").matches;
-    const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.newCount, r.dueCount, r.overCount)));
-
-    if(mobile){
-      const list=rows.map(r=>{
-        const wNew=Math.max(0, (r.newCount/maxVal)*100);
-        const wDue=Math.max(0, (r.dueCount/maxVal)*100);
-        const wOver=Math.max(0, (r.overCount/maxVal)*100);
-        return `
-          <div class="dashCompareItem">
-            <div class="dashCompareHead">
-              <div>
-                <div class="dashAlias">${escapeHtml(r.alias)}</div>
-                <div class="dashFull">${escapeHtml(r.name)}</div>
-              </div>
-              <div class="dashCompareTotal">${r.newCount+r.dueCount+r.overCount}</div>
-            </div>
-            <div class="dashCompareLines">
-              <button type="button" class="dashCompareBtn" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="new">
-                <span class="dashCompareLbl"><i class="lg new"></i>Phát sinh</span>
-                <span class="dashCompareNum">${r.newCount}</span>
-              </button>
-              <div class="dashCompareTrack"><div class="dashCompareFill fill-new" style="width:${wNew}%"></div></div>
-
-              <button type="button" class="dashCompareBtn" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="due">
-                <span class="dashCompareLbl"><i class="lg due"></i>Đến hạn</span>
-                <span class="dashCompareNum">${r.dueCount}</span>
-              </button>
-              <div class="dashCompareTrack"><div class="dashCompareFill fill-due" style="width:${wDue}%"></div></div>
-
-              <button type="button" class="dashCompareBtn" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="over">
-                <span class="dashCompareLbl"><i class="lg over"></i>Quá hạn</span>
-                <span class="dashCompareNum">${r.overCount}</span>
-              </button>
-              <div class="dashCompareTrack"><div class="dashCompareFill fill-over" style="width:${wOver}%"></div></div>
-            </div>
-          </div>`;
-      }).join('');
-      el.innerHTML = `
-        <div class="dashChartHeader">
-          <div>
-            <div class="dashChartTitle">${escapeHtml(weekLabel)}</div>
-            <div class="dashChartSub">So sánh theo cán bộ: công việc phát sinh, đến hạn và quá hạn trong tuần hiện tại. Bấm từng dòng để lọc tab Công việc.</div>
-          </div>
-          <div class="dashLegend">
-            <span><i class="lg new"></i>Phát sinh</span>
-            <span><i class="lg due"></i>Đến hạn</span>
-            <span><i class="lg over"></i>Quá hạn</span>
-          </div>
-        </div>
-        <div class="dashCompareList">${list}</div>`;
-      return;
-    }
-
-    const chartH=Math.max(280, rows.length*74);
-    const pad={top:24,right:26,bottom:40,left:120};
-    const innerW=740;
-    const innerH=chartH-pad.top-pad.bottom;
-    const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
-    const gap=5;
-    const colors={new:'#0f766e', due:'#f59e0b', over:'#dc2626'};
-    const x=(v)=> pad.left + (v/maxVal)*innerW;
-    const yBase=(i)=> pad.top + i*groupH;
-    const ticks=[];
-    for(let i=0;i<=maxVal;i++) ticks.push(i);
-    const grid=ticks.map(v=>{
-      const xv=x(v);
-      return `<g><line x1="${xv}" y1="${pad.top-8}" x2="${xv}" y2="${pad.top+innerH}" stroke="#d7e1dd" stroke-dasharray="4 4"/><text x="${xv}" y="${chartH-14}" text-anchor="middle" font-size="11" fill="#5b6b67">${v}</text></g>`;
-    }).join('');
-    const bars=rows.map((r,i)=>{
-      const y=yBase(i);
-      const lines=[
-        {key:'new', label:'Phát sinh', value:r.newCount, y:y+4},
-        {key:'due', label:'Đến hạn', value:r.dueCount, y:y+4+barH+gap},
-        {key:'over', label:'Quá hạn', value:r.overCount, y:y+4+(barH+gap)*2},
-      ].map(item=>{
-        const width=Math.max(item.value>0 ? 10 : 0, (item.value/maxVal)*innerW);
-        const textX=item.value>0 ? Math.min(pad.left+innerW-8, pad.left+width+8) : pad.left+8;
-        return `
-          <g class="dashBarHot" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="${item.key}" style="cursor:pointer">
-            <title>${escapeHtml(r.alias)} • ${escapeHtml(item.label)}: ${item.value}</title>
-            <rect x="${pad.left}" y="${item.y}" width="${width}" height="${barH}" rx="6" fill="${colors[item.key]}" opacity="0.92"></rect>
-            <text x="${textX}" y="${item.y+barH-2}" font-size="11" fill="#16312b">${item.value}</text>
-          </g>`;
-      }).join('');
+    const maxTotal=Math.max(1, ...rows.map(r=>r.newCount+r.dueCount+r.overCount));
+    const matrixRows = rows.map(r=>{
+      const total=r.newCount+r.dueCount+r.overCount;
+      const pct=Math.max(6, Math.round(total/maxTotal*100));
       return `
-        <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
-          ${lines}
-        </g>`;
+        <div class="dashMatrixRow dashTaskMatrixRow">
+          <div class="dashMatrixStaff">
+            <div class="dashAlias">${escapeHtml(r.alias)}</div>
+            <div class="dashFull">${escapeHtml(r.name)}</div>
+            <div class="dashMiniBar"><div class="dashMiniBarFill" style="width:${pct}%"></div></div>
+          </div>
+          <button type="button" class="dashMatrixCell is-new" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="new" title="${escapeHtml(r.alias)} • Phát sinh">
+            <span class="dashMatrixNum">${r.newCount}</span>
+          </button>
+          <button type="button" class="dashMatrixCell is-due" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="due" title="${escapeHtml(r.alias)} • Đến hạn">
+            <span class="dashMatrixNum">${r.dueCount}</span>
+          </button>
+          <button type="button" class="dashMatrixCell is-over" data-dash-task="1" data-staff="${escapeHtml(r.id)}" data-mode="over" title="${escapeHtml(r.alias)} • Quá hạn">
+            <span class="dashMatrixNum">${r.overCount}</span>
+          </button>
+          <div class="dashMatrixTotal">${total}</div>
+        </div>`;
     }).join('');
 
     el.innerHTML = `
       <div class="dashChartHeader">
         <div>
           <div class="dashChartTitle">${escapeHtml(weekLabel)}</div>
-          <div class="dashChartSub">So sánh theo cán bộ: công việc phát sinh, đến hạn và quá hạn trong tuần hiện tại. Bấm trực tiếp từng thanh để lọc tab Công việc.</div>
+          <div class="dashChartSub">Bảng so sánh dọc giữa các cán bộ. Chạm vào số ở từng cột để lọc tab Công việc.</div>
         </div>
         <div class="dashLegend">
           <span><i class="lg new"></i>Phát sinh</span>
@@ -460,14 +394,18 @@
           <span><i class="lg over"></i>Quá hạn</span>
         </div>
       </div>
-      <div class="dashSvgWrap">
-        <svg viewBox="0 0 ${pad.left+innerW+pad.right} ${chartH}" class="dashSvgChart" role="img" aria-label="${escapeHtml(weekLabel)}">
-          ${grid}
-          ${bars}
-        </svg>
-      </div>
-    `;
+      <div class="dashMatrix">
+        <div class="dashMatrixHead">
+          <div class="dashMatrixHeadStaff">Cán bộ</div>
+          <div class="dashMatrixHeadNum">PS</div>
+          <div class="dashMatrixHeadNum">ĐH</div>
+          <div class="dashMatrixHeadNum">QH</div>
+          <div class="dashMatrixHeadNum">Tổng</div>
+        </div>
+        ${matrixRows}
+      </div>`;
   }
+
 
 
   function dashboardReportCompareRows(reports, staff){
@@ -490,108 +428,38 @@
   function renderReportCompareChart(el, rows){
     if(!el) return;
     if(!rows.length){
-      el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu báo cáo để vẽ biểu đồ.</div>`;
+      el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu báo cáo để so sánh.</div>`;
       return;
     }
-    const mobile = window.matchMedia("(max-width: 720px)").matches;
-    const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.leadCount, r.collabCount, r.lateCount)));
-
-    if(mobile){
-      const list=rows.map(r=>{
-        const wLead=Math.max(0,(r.leadCount/maxVal)*100);
-        const wCollab=Math.max(0,(r.collabCount/maxVal)*100);
-        const wLate=Math.max(0,(r.lateCount/maxVal)*100);
-        return `
-          <div class="dashCompareItem">
-            <div class="dashCompareHead">
-              <div>
-                <div class="dashAlias">${escapeHtml(r.alias)}</div>
-                <div class="dashFull">${escapeHtml(r.name)}</div>
-              </div>
-              <div class="dashCompareTotal">${r.leadCount+r.collabCount+r.lateCount}</div>
-            </div>
-            <div class="dashCompareLines">
-              <button type="button" class="dashCompareBtn" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="lead">
-                <span class="dashCompareLbl"><i class="lg new"></i>Đầu mối</span>
-                <span class="dashCompareNum">${r.leadCount}</span>
-              </button>
-              <div class="dashCompareTrack"><div class="dashCompareFill fill-new" style="width:${wLead}%"></div></div>
-
-              <button type="button" class="dashCompareBtn" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="collab">
-                <span class="dashCompareLbl"><i class="lg collab"></i>Phối hợp</span>
-                <span class="dashCompareNum">${r.collabCount}</span>
-              </button>
-              <div class="dashCompareTrack"><div class="dashCompareFill fill-collab" style="width:${wCollab}%"></div></div>
-
-              <button type="button" class="dashCompareBtn" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="late">
-                <span class="dashCompareLbl"><i class="lg over"></i>Quá hạn</span>
-                <span class="dashCompareNum">${r.lateCount}</span>
-              </button>
-              <div class="dashCompareTrack"><div class="dashCompareFill fill-over" style="width:${wLate}%"></div></div>
-            </div>
-          </div>`;
-      }).join('');
-      el.innerHTML = `
-        <div class="dashChartHeader">
-          <div>
-            <div class="dashChartTitle">Báo cáo theo cán bộ</div>
-            <div class="dashChartSub">So sánh số lượng báo cáo đầu mối, phối hợp và quá hạn. Bấm từng dòng để lọc tab Báo cáo.</div>
-          </div>
-          <div class="dashLegend">
-            <span><i class="lg new"></i>Đầu mối</span>
-            <span><i class="lg collab"></i>Phối hợp</span>
-            <span><i class="lg over"></i>Quá hạn</span>
-          </div>
-        </div>
-        <div class="dashCompareList">${list}</div>`;
-      return;
-    }
-
-    const chartH=Math.max(260, rows.length*74);
-    const pad={top:24,right:26,bottom:40,left:120};
-    const innerW=660;
-    const innerH=chartH-pad.top-pad.bottom;
-    const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
-    const gap=5;
-    const colors={lead:'#0f766e', collab:'#2563eb', late:'#dc2626'};
-    const x=(v)=> pad.left + (v/maxVal)*innerW;
-    const yBase=(i)=> pad.top + i*groupH;
-    const ticks=[];
-    for(let i=0;i<=maxVal;i++) ticks.push(i);
-    const grid=ticks.map(v=>{
-      const xv=x(v);
-      return `<g><line x1="${xv}" y1="${pad.top-8}" x2="${xv}" y2="${pad.top+innerH}" stroke="#d7e1dd" stroke-dasharray="4 4"/><text x="${xv}" y="${chartH-14}" text-anchor="middle" font-size="11" fill="#5b6b67">${v}</text></g>`;
-    }).join('');
-    const bars=rows.map((r,i)=>{
-      const y=yBase(i);
-      const lines=[
-        {key:'lead', label:'Đầu mối', value:r.leadCount, y:y+4, mode:'lead'},
-        {key:'collab', label:'Phối hợp', value:r.collabCount, y:y+4+barH+gap, mode:'collab'},
-        {key:'late', label:'Quá hạn', value:r.lateCount, y:y+4+(barH+gap)*2, mode:'late'},
-      ].map(item=>{
-        const width=Math.max(item.value>0 ? 10 : 0, (item.value/maxVal)*innerW);
-        const textX=item.value>0 ? Math.min(pad.left+innerW-8, pad.left+width+8) : pad.left+8;
-        return `
-          <g class="dashBarHot" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="${item.mode}" style="cursor:pointer">
-            <title>${escapeHtml(r.alias)} • ${escapeHtml(item.label)}: ${item.value}</title>
-            <rect x="${pad.left}" y="${item.y}" width="${width}" height="${barH}" rx="6" fill="${colors[item.key]}" opacity="0.92"></rect>
-            <text x="${textX}" y="${item.y+barH-2}" font-size="11" fill="#16312b">${item.value}</text>
-          </g>`;
-      }).join('');
+    const maxTotal=Math.max(1, ...rows.map(r=>r.leadCount+r.collabCount+r.lateCount));
+    const matrixRows = rows.map(r=>{
+      const total=r.leadCount+r.collabCount+r.lateCount;
+      const pct=Math.max(6, Math.round(total/maxTotal*100));
       return `
-        <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
-          ${lines}
-        </g>`;
+        <div class="dashMatrixRow dashReportMatrixRow">
+          <div class="dashMatrixStaff">
+            <div class="dashAlias">${escapeHtml(r.alias)}</div>
+            <div class="dashFull">${escapeHtml(r.name)}</div>
+            <div class="dashMiniBar"><div class="dashMiniBarFill" style="width:${pct}%"></div></div>
+          </div>
+          <button type="button" class="dashMatrixCell is-new" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="lead" title="${escapeHtml(r.alias)} • Đầu mối">
+            <span class="dashMatrixNum">${r.leadCount}</span>
+          </button>
+          <button type="button" class="dashMatrixCell is-collab" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="collab" title="${escapeHtml(r.alias)} • Phối hợp">
+            <span class="dashMatrixNum">${r.collabCount}</span>
+          </button>
+          <button type="button" class="dashMatrixCell is-over" data-dash-report="1" data-staff="${escapeHtml(r.id)}" data-mode="late" title="${escapeHtml(r.alias)} • Quá hạn">
+            <span class="dashMatrixNum">${r.lateCount}</span>
+          </button>
+          <div class="dashMatrixTotal">${total}</div>
+        </div>`;
     }).join('');
 
     el.innerHTML = `
       <div class="dashChartHeader">
         <div>
           <div class="dashChartTitle">Báo cáo theo cán bộ</div>
-          <div class="dashChartSub">So sánh số lượng báo cáo đầu mối, phối hợp và báo cáo quá hạn. Bấm trực tiếp từng thanh để lọc tab Báo cáo.</div>
+          <div class="dashChartSub">Bảng so sánh dọc giữa đầu mối, phối hợp và báo cáo quá hạn. Chạm vào số để lọc tab Báo cáo.</div>
         </div>
         <div class="dashLegend">
           <span><i class="lg new"></i>Đầu mối</span>
@@ -599,14 +467,18 @@
           <span><i class="lg over"></i>Quá hạn</span>
         </div>
       </div>
-      <div class="dashSvgWrap">
-        <svg viewBox="0 0 ${pad.left+innerW+pad.right} ${chartH}" class="dashSvgChart" role="img" aria-label="Biểu đồ báo cáo theo cán bộ">
-          ${grid}
-          ${bars}
-        </svg>
-      </div>
-    `;
+      <div class="dashMatrix">
+        <div class="dashMatrixHead">
+          <div class="dashMatrixHeadStaff">Cán bộ</div>
+          <div class="dashMatrixHeadNum">ĐM</div>
+          <div class="dashMatrixHeadNum">PH</div>
+          <div class="dashMatrixHeadNum">QH</div>
+          <div class="dashMatrixHeadNum">Tổng</div>
+        </div>
+        ${matrixRows}
+      </div>`;
   }
+
 
   function dashboardForecastSummaryRows(staff, metrics){
     return (metrics||[]).map(m=>{
@@ -678,7 +550,7 @@
     if(!dashTaskCompareChart || !dashCards || !dashTaskStatus || !dashReportSummary || !dashForecastRows || !dashStaffTaskBody || !dashStaffReportBody) return;
 
     const L=getLists();
-    const staff=(L.staff||[]).filter(s=>String(s.id)!=="54000600");
+    const staff=dashboardStaffList();
     const tasks=dashboardTasksBase();
     const reports=dashboardReportRows();
 

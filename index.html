@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.8.6">
+  <link rel="stylesheet" href="styles.css?v=6.8.8">
   <style>
 
     *,*::before,*::after{box-sizing:border-box}
@@ -26,6 +26,23 @@
     .dashCompareFill.fill-due{background:#f59e0b}
     .dashCompareFill.fill-over{background:#dc2626}
     .dashCompareFill.fill-collab{background:#2563eb}
+    .dashMatrix{display:grid;gap:10px}
+    .dashMatrixHead,.dashMatrixRow{display:grid;grid-template-columns:minmax(120px,1fr) 56px 56px 56px 62px;gap:8px;align-items:center}
+    .dashMatrixHead{padding:0 2px 4px;color:#5b6b67;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.3px}
+    .dashMatrixHeadStaff{text-align:left}
+    .dashMatrixHeadNum{text-align:center}
+    .dashMatrixRow{border:1px solid #e7ece9;border-radius:16px;padding:10px;background:#fbfcfb}
+    .dashMatrixStaff{min-width:0}
+    .dashMiniBar{height:6px;background:#edf2ef;border-radius:999px;overflow:hidden;margin-top:7px}
+    .dashMiniBarFill{height:100%;background:linear-gradient(90deg,#1d8f6a,#5bc595);border-radius:999px}
+    .dashMatrixCell,.dashMatrixTotal{height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px}
+    .dashMatrixCell{border:none;cursor:pointer;color:#143530}
+    .dashMatrixCell.is-new{background:#e8f6f2;color:#0f766e}
+    .dashMatrixCell.is-due{background:#fff6e5;color:#b76a00}
+    .dashMatrixCell.is-over{background:#fff0ef;color:#c03a2b}
+    .dashMatrixCell.is-collab{background:#edf3ff;color:#215ed1}
+    .dashMatrixTotal{background:#f2f6f4;color:#0b2b26}
+    .dashMatrixNum{line-height:1}
     .dashGrid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}
     @media (max-width:900px){.dashGrid2{grid-template-columns:1fr}}
     .dashPanel{background:#fff;border:1px solid #e7ece9;border-radius:18px;padding:14px;box-shadow:0 8px 24px rgba(12,40,28,.05)}
@@ -355,6 +372,12 @@
       .dashGrid2 > .dashPanel{margin-bottom:10px}
       .dashCompareItem{padding:10px}
       .dashCompareTotal{font-size:16px}
+      .dashMatrix{gap:8px}
+      .dashMatrixHead,.dashMatrixRow{grid-template-columns:minmax(100px,1fr) 48px 48px 48px 54px;gap:6px}
+      .dashMatrixHead{font-size:11px;padding-bottom:2px}
+      .dashMatrixRow{padding:9px 8px;border-radius:14px}
+      .dashMatrixCell,.dashMatrixTotal{height:38px;border-radius:10px;font-size:16px}
+      .dashFull{font-size:11px}
       .dashMetricNums{gap:6px}
       .dashMini{font-size:11px;padding:4px 7px}
       #viewTasks .tableScroll table,
@@ -868,7 +891,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="config.js?v=6.8.7"></script>
-  <script src="app.js?v=6.8.7"></script>
+  <script src="config.js?v=6.8.8"></script>
+  <script src="app.js?v=6.8.8"></script>
 </body>
 </html>
