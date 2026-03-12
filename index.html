@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Theo dõi & Phân công công việc</title>
-  <link rel="stylesheet" href="styles.css?v=6.8.2">
+  <link rel="stylesheet" href="styles.css?v=6.8.6">
   <style>
     .dashGrid2{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:14px}
     @media (max-width:900px){.dashGrid2{grid-template-columns:1fr}}
@@ -53,6 +53,277 @@
       .dashSvgChart{min-width:760px}
     }
 
+
+    .weekPickerWrap{position:relative;min-width:170px}
+    .weekPickerWrap input[type="date"]{position:relative;z-index:2;background:transparent;color:transparent;caret-color:transparent;text-shadow:none;min-width:170px}
+    .weekPickerWrap input[type="date"]::-webkit-datetime-edit{color:transparent}
+    .weekPickerWrap input[type="date"]::-webkit-inner-spin-button{display:none}
+    .weekPickerDisplay{position:absolute;inset:0 38px 0 0;display:flex;align-items:center;font-weight:800;color:#0b2230;pointer-events:none;letter-spacing:.2px;white-space:nowrap;z-index:1}
+    .weekPickerWrap input[type="date"]::-webkit-calendar-picker-indicator{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:1;cursor:pointer}
+    .weekPickerWrap input[type="date"]::-moz-focus-inner{border:0}
+
+
+    .compact-control{min-width:0}
+    .compact-control select,
+    .compact-control input[type="date"]{width:100%}
+
+    @media (max-width: 720px){
+      .header{display:flex;flex-direction:column;gap:10px}
+      .header .hleft h1{font-size:24px;line-height:1.15;margin-bottom:4px}
+      .header .sub{font-size:14px;line-height:1.35}
+      .header .hright{display:grid !important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;gap:10px !important;align-items:start}
+      .header .hright > *{min-width:0}
+      .header .hright .compact-control{padding:8px 12px !important;border-radius:18px}
+      .header .hright .compact-control label{font-size:11px !important;line-height:1.1;margin-bottom:4px !important;color:#5b6b67}
+      .header .hright .compact-control select,
+      .header .hright .compact-control input[type="date"]{min-width:0 !important;height:38px !important;min-height:38px !important;font-size:15px !important;font-weight:800}
+      .header .hright .compact-control .weekPickerWrap,
+      .header .hright .compact-control .weekPickerWrap input[type="date"]{min-width:0 !important;width:100% !important}
+      .header .hright .compact-control .weekPickerDisplay{font-size:15px !important;inset:0 30px 0 0 !important}
+      .header .hright .pill-week{grid-column:1}
+      .header .hright .pill-me{grid-column:2}
+      .header .hright #btnAdd{grid-column:1 / -1}
+      .header .hright #btnExport{grid-column:1 / -1}
+      .header .hright #btnDashPdf{grid-column:1 / -1}
+      .header .hright #btnLists{grid-column:1}
+      .header .hright .syncBox{grid-column:2;min-width:0}
+      .header .hright .syncTag{width:100%;justify-content:center}
+      .tabsTop{gap:8px;overflow:auto;padding-bottom:2px}
+      .tabsTop .tabBtn{white-space:nowrap}
+    }
+
+
+    html,body{max-width:100%;overflow-x:hidden}
+    body{overscroll-behavior-x:none}
+    .container{max-width:1200px;margin:0 auto;padding:12px;overflow-x:hidden}
+    .topbar{position:sticky;top:0;z-index:30;background:linear-gradient(180deg, rgba(243,247,246,.98), rgba(243,247,246,.95));backdrop-filter:saturate(120%) blur(6px);margin:-12px -12px 12px;padding:12px 12px 10px;border-bottom:1px solid #dfe8e4}
+    .tableScroll{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+    .tableScroll > table{width:100%}
+    #viewDashboard .tableScroll table{min-width:620px}
+    .dashSvgWrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+    .dashSvgChart{display:block;height:auto}
+    .dashPanel,.tableWrap,.note,.card{max-width:100%}
+
+    @media (max-width: 720px){
+      .container{padding:10px}
+      .topbar{margin:-10px -10px 10px;padding:10px 10px 8px}
+      .header{gap:8px;margin-bottom:8px}
+      .header .hleft h1{font-size:17px !important;line-height:1.15;margin-bottom:2px}
+      .header .sub{font-size:11px !important;line-height:1.25;margin-top:2px}
+      .header .hright{display:grid !important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;gap:8px !important;width:100%}
+      .header .hright .pill,
+      .header .hright .btn,
+      .header .hright .syncBox{min-width:0;width:100%}
+      .header .hright .compact-control{padding:7px 10px !important;border-radius:16px !important}
+      .header .hright .compact-control label{font-size:10px !important;margin-bottom:2px !important}
+      .header .hright .compact-control select,
+      .header .hright .compact-control input[type="date"]{height:34px !important;min-height:34px !important;font-size:13px !important;font-weight:800}
+      .header .hright .compact-control .weekPickerDisplay{font-size:13px !important}
+      .header .hright .pill-week{grid-column:1}
+      .header .hright .pill-me{grid-column:2}
+      .header .hright #btnExport{grid-column:1}
+      .header .hright #btnDashPdf{grid-column:2}
+      .header .hright #btnLists{grid-column:1}
+      .header .hright .syncBox{grid-column:2}
+      .header .hright #btnAdd{grid-column:1 / -1;padding:9px 10px !important;font-size:13px !important;min-height:38px}
+      .header .hright #btnExport,
+      .header .hright #btnDashPdf,
+      .header .hright #btnLists{padding:9px 10px !important;font-size:12px !important;min-height:38px;white-space:nowrap}
+      .header .hright .syncTag{padding:7px 8px !important;font-size:11px !important;line-height:1.15;justify-content:center;text-align:center;min-height:38px;border-radius:16px}
+      .tabsTop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;overflow:visible;padding-bottom:0}
+      .tabsTop .tabBtn{min-width:0;white-space:normal;padding:8px 4px;font-size:12px;line-height:1.15;text-align:center;border-radius:14px}
+      .note{padding:10px 11px;font-size:12px;line-height:1.35}
+      .grid4{gap:8px;margin:10px 0}
+      .card{padding:10px 12px;border-radius:14px}
+      .card .v{font-size:22px}
+      .filters{gap:8px}
+      .filters select,.chk,.btn.ghost{width:100%;min-width:0}
+      .dashGrid2{gap:10px;margin-top:10px}
+      .dashPanel{padding:11px;border-radius:16px}
+      .dashPanel h3{font-size:15px;margin-bottom:8px}
+      .dashChartTitle{font-size:16px !important;line-height:1.2}
+      .dashChartSub{font-size:12px !important;line-height:1.35}
+      .dashLegend{gap:10px;font-size:12px}
+      .dashMetricName{font-size:14px}
+      .dashGaugePct,.dashMetricPct{font-size:14px}
+      #viewDashboard .tableScroll table{min-width:560px}
+      #viewTasks .tableScroll table,
+      #viewReports .tableScroll table,
+      #viewForecast .tableScroll table{min-width:860px}
+    }
+
+
+    /* ---- v6.8.6 mobile hardening ---- */
+    .topbar{position:-webkit-sticky;position:sticky;top:0;z-index:120;will-change:transform}
+    .viewPad{max-width:100%}
+    @media (max-width: 960px){
+      #viewTasks .tableWrap,
+      #viewReports .tableWrap{margin-top:10px}
+      #viewTasks table,#viewTasks tbody,#viewTasks tr,#viewTasks td,
+      #viewReports table,#viewReports tbody,#viewReports tr,#viewReports td{
+        display:block;width:100%;
+      }
+      #viewTasks thead,#viewReports thead{display:none !important}
+      #viewTasks tbody tr,
+      #viewReports tbody tr{
+        padding:0 !important;
+        border-radius:18px !important;
+        overflow:hidden;
+        margin-bottom:12px;
+      }
+      #viewTasks tbody td,
+      #viewReports tbody td{
+        display:grid !important;
+        grid-template-columns:104px minmax(0,1fr);
+        gap:10px;
+        align-items:start;
+        padding:10px 12px !important;
+        border-top:1px solid rgba(0,0,0,.06);
+        border-bottom:none !important;
+        border-left:none !important;
+        border-right:none !important;
+        border-radius:0 !important;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+        white-space:normal !important;
+      }
+      #viewTasks tbody td:first-child,
+      #viewReports tbody td:first-child{
+        border-top:none !important;
+        border-top-left-radius:18px !important;
+        border-top-right-radius:18px !important;
+      }
+      #viewTasks tbody td:last-child,
+      #viewReports tbody td:last-child{
+        border-bottom-left-radius:18px !important;
+        border-bottom-right-radius:18px !important;
+      }
+      #viewTasks tbody td::before,
+      #viewReports tbody td::before{
+        display:block !important;
+        margin:0 !important;
+        font-size:11px !important;
+        line-height:1.3 !important;
+        font-weight:800;
+        color:#667772 !important;
+      }
+      #viewTasks tbody td[data-label="Công việc / Hoạt động"],
+      #viewReports tbody td[data-label="Báo cáo"]{
+        grid-template-columns:minmax(0,1fr) !important;
+        gap:6px;
+        padding-top:14px !important;
+      }
+      #viewTasks tbody td[data-label="Công việc / Hoạt động"]::before,
+      #viewReports tbody td[data-label="Báo cáo"]::before{
+        margin-bottom:0 !important;
+      }
+      #viewTasks tbody td[data-label="Kết quả / Ghi chú"],
+      #viewTasks tbody td[data-label="Tác vụ"],
+      #viewReports tbody td[data-label="Phối hợp"],
+      #viewReports tbody td[data-label="Tác vụ"]{
+        grid-template-columns:minmax(0,1fr) !important;
+      }
+      #viewTasks tbody td button,
+      #viewReports tbody td button{
+        min-height:36px;
+      }
+      #viewTasks tbody td > div,
+      #viewReports tbody td > div{
+        max-width:100%;
+        min-width:0;
+      }
+      #viewTasks .btn-mini,
+      #viewReports .btn-mini{
+        width:auto;
+      }
+      #viewTasks [data-label="Tác vụ"] .btn-mini,
+      #viewReports [data-label="Tác vụ"] .btn-mini{
+        margin-right:8px;
+        margin-top:6px;
+      }
+      .dashSvgChart{min-width:620px !important}
+    }
+
+    .mobileAddFab{display:none}
+    @media (max-width: 720px){
+      .topbar{padding-top:calc(10px + env(safe-area-inset-top, 0px))}
+      .topbar.compact{
+        padding:8px 10px 6px !important;
+        box-shadow:0 8px 24px rgba(0,0,0,.08);
+      }
+      .topbar.compact .hleft,
+      .topbar.compact #btnExport,
+      .topbar.compact #btnDashPdf,
+      .topbar.compact #btnLists,
+      .topbar.compact .syncBox{
+        display:none !important;
+      }
+      .topbar.compact .header{
+        margin-bottom:0 !important;
+        gap:0 !important;
+      }
+      .topbar.compact .header .hright{
+        display:grid !important;
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto !important;
+        gap:6px !important;
+        width:100%;
+        align-items:center;
+      }
+      .topbar.compact .header .hright .pill-week{grid-column:1}
+      .topbar.compact .header .hright .pill-me{grid-column:2}
+      .topbar.compact .header .hright #btnAdd{
+        grid-column:3 !important;
+        grid-row:1 !important;
+        display:inline-flex !important;
+        align-items:center;
+        justify-content:center;
+        min-height:34px !important;
+        padding:0 12px !important;
+        font-size:12px !important;
+        border-radius:12px !important;
+        white-space:nowrap;
+      }
+      .topbar.compact .header .hright .compact-control{
+        padding:5px 8px !important;
+        border-radius:14px !important;
+      }
+      .topbar.compact .header .hright .compact-control label{
+        display:none !important;
+      }
+      .topbar.compact .header .hright .compact-control select,
+      .topbar.compact .header .hright .compact-control input[type="date"]{
+        height:32px !important;
+        min-height:32px !important;
+        font-size:12px !important;
+      }
+      .topbar.compact .header .hright .compact-control .weekPickerDisplay{
+        font-size:12px !important;
+        inset:0 26px 0 0 !important;
+      }
+      .topbar.compact .tabsTop{
+        display:none !important;
+      }
+      .mobileAddFab{
+        position:fixed;
+        right:14px;
+        bottom:calc(18px + env(safe-area-inset-bottom, 0px));
+        z-index:130;
+        width:52px;
+        height:52px;
+        border:none;
+        border-radius:999px;
+        background:linear-gradient(180deg, rgba(13,148,136,.96), rgba(15,118,110,.92));
+        color:#fff;
+        font-size:28px;
+        font-weight:800;
+        line-height:1;
+        box-shadow:0 14px 28px rgba(15,118,110,.28);
+      }
+      body.modal-open .mobileAddFab{display:none !important}
+      #viewTasks,#viewReports,#viewForecast,#viewDashboard{scroll-margin-top:82px}
+      .note{border-radius:16px}
+    }
+
   </style>
 </head>
 <body>
@@ -61,22 +332,26 @@
     <div class="header">
       <div class="hleft">
         <h1>Theo dõi &amp; Phân công công việc</h1>
-        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.2)</span></div>
+        <div class="sub">Kế hoạch tuần • giao việc • theo dõi tiến độ • <span class="ver">(v6.8.6)</span></div>
       </div>
 
       <div class="hright">
-        <div class="pill">
+        <div class="pill compact-control pill-week">
           <label>Tuần</label>
-          <input id="weekPicker" type="date"/>
+          <div class="weekPickerWrap">
+            <span id="weekPickerDisplay" class="weekPickerDisplay">dd/mm/yyyy</span>
+            <input id="weekPicker" type="date"/>
+          </div>
         </div>
 
-        <div class="pill">
+        <div class="pill compact-control pill-me">
           <label>Tôi là</label>
           <select id="mePicker"></select>
         </div>
 
         <button class="btn primary" id="btnAdd">+ Thêm việc</button>
         <button class="btn" id="btnExport">Xuất báo cáo tuần</button>
+        <button class="btn" id="btnDashPdf" style="display:none">Xuất PDF Dashboard</button>
         <button class="btn" id="btnLists">Danh mục</button>
 
         <div class="syncBox">
@@ -93,6 +368,7 @@
     </div>
   </div>
 
+    <button class="mobileAddFab" id="btnAddFab" aria-label="Thêm nhanh">+</button>
 
     <!-- DASHBOARD VIEW -->
     <section id="viewDashboard">
@@ -517,7 +793,9 @@
 
   <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js?v=6.8.2"></script>
-  <script src="app.js?v=6.8.2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="config.js?v=6.8.6"></script>
+  <script src="app.js?v=6.8.6"></script>
 </body>
 </html>

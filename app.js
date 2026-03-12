@@ -42,7 +42,7 @@
     }
   };
   const CFG = window.CONFIG || {};
-  const VERSION = "6.8.2";
+  const VERSION = "6.8.6";
 
   // ---- Storage keys ----
   const KEY_LISTS = "kehoachtuan.lists.v6";
@@ -176,6 +176,11 @@
     if(n===null||n===undefined||n==="") return "";
     const x=Number(n); if(!Number.isFinite(x)) return "";
     return x.toLocaleString("vi-VN",{maximumFractionDigits:3});
+  }
+
+  function updateWeekPickerDisplay(){
+    if(!weekPickerDisplay) return;
+    weekPickerDisplay.textContent = state && state.week ? fmtDDMMYYYY(state.week) : "dd/mm/yyyy";
   }
 
   function loadJSON(key){ try { return JSON.parse(localStorage.getItem(key)||"null"); } catch { return null; } }
@@ -349,14 +354,15 @@
       el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu công việc để vẽ biểu đồ.</div>`;
       return;
     }
+    const mobile = window.matchMedia("(max-width: 720px)").matches;
     const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.newCount, r.dueCount, r.overCount)));
-    const chartH=Math.max(280, rows.length*74);
-    const pad={top:24,right:26,bottom:40,left:120};
-    const innerW=740;
+    const chartH=Math.max(mobile ? 220 : 280, rows.length*(mobile ? 62 : 74));
+    const pad=mobile ? {top:18,right:18,bottom:34,left:78} : {top:24,right:26,bottom:40,left:120};
+    const innerW=mobile ? 430 : 740;
     const innerH=chartH-pad.top-pad.bottom;
     const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
-    const gap=5;
+    const barH=Math.max(10, Math.min(mobile ? 14 : 16, (groupH-(mobile ? 14 : 18))/3));
+    const gap=mobile ? 4 : 5;
     const colors={new:'#0f766e', due:'#f59e0b', over:'#dc2626'};
     const x=(v)=> pad.left + (v/maxVal)*innerW;
     const yBase=(i)=> pad.top + i*groupH;
@@ -386,8 +392,8 @@
       }).join('');
       return `
         <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="${mobile ? 12 : 13}" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          ${mobile ? '' : `<text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>`}
           ${lines}
         </g>`;
     }).join('');
@@ -437,14 +443,15 @@
       el.innerHTML = `<div class="dashEmpty">Chưa có dữ liệu báo cáo để vẽ biểu đồ.</div>`;
       return;
     }
+    const mobile = window.matchMedia("(max-width: 720px)").matches;
     const maxVal=Math.max(1, ...rows.map(r=>Math.max(r.leadCount, r.collabCount, r.lateCount)));
-    const chartH=Math.max(260, rows.length*74);
-    const pad={top:24,right:26,bottom:40,left:120};
-    const innerW=660;
+    const chartH=Math.max(mobile ? 220 : 260, rows.length*(mobile ? 62 : 74));
+    const pad=mobile ? {top:18,right:18,bottom:34,left:78} : {top:24,right:26,bottom:40,left:120};
+    const innerW=mobile ? 390 : 660;
     const innerH=chartH-pad.top-pad.bottom;
     const groupH=innerH/Math.max(1,rows.length);
-    const barH=Math.max(10, Math.min(16, (groupH-18)/3));
-    const gap=5;
+    const barH=Math.max(10, Math.min(mobile ? 14 : 16, (groupH-(mobile ? 14 : 18))/3));
+    const gap=mobile ? 4 : 5;
     const colors={lead:'#0f766e', collab:'#2563eb', late:'#dc2626'};
     const x=(v)=> pad.left + (v/maxVal)*innerW;
     const yBase=(i)=> pad.top + i*groupH;
@@ -472,8 +479,8 @@
       }).join('');
       return `
         <g>
-          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="13" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
-          <text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>
+          <text x="${pad.left-12}" y="${y+16}" text-anchor="end" font-size="${mobile ? 12 : 13}" font-weight="700" fill="#082c35">${escapeHtml(r.alias)}</text>
+          ${mobile ? '' : `<text x="${pad.left-12}" y="${y+32}" text-anchor="end" font-size="11" fill="#5b6b67">${escapeHtml(r.name)}</text>`}
           ${lines}
         </g>`;
     }).join('');
@@ -881,8 +888,8 @@
   };
 
   // ---- DOM ----
-  const elWeek=$("#weekPicker"), elMe=$("#mePicker");
-  const btnAdd=$("#btnAdd"), btnExport=$("#btnExport"), btnLists=$("#btnLists");
+  const elWeek=$("#weekPicker"), elMe=$("#mePicker"), weekPickerDisplay=$("#weekPickerDisplay");
+  const btnAdd=$("#btnAdd"), btnAddFab=$("#btnAddFab"), btnExport=$("#btnExport"), btnDashPdf=$("#btnDashPdf"), btnLists=$("#btnLists");
   const tabDashboard=$("#tabDashboard"), tabTasks=$("#tabTasks"), tabForecast=$("#tabForecast"), tabReports=$("#tabReports");
   const viewDashboard=$("#viewDashboard"), viewTasks=$("#viewTasks"), viewForecast=$("#viewForecast"), viewReports=$("#viewReports");
 
@@ -1009,7 +1016,7 @@
 
     const L=getLists();
     const staff=L.staff||[];
-    fillSelect(elMe, staff, {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
+    fillSelect(elMe, staff, {valueKey:"id", labelFn:s=>shortStaffName(s.name||s.id, s.id), emptyLabel:"-- Chọn --"});
     fillSelect(fmOwner, staff, {valueKey:"id", labelFn:s=>`${s.id} - ${s.name}`, emptyLabel:"-- Chọn --"});
     fillSelect(filterAssignee, staff, {valueKey:"id", labelFn:s=>s.name, emptyLabel:"-- Lọc theo CB đầu mối --"});
 
@@ -2545,6 +2552,70 @@ const newLists={
     XLSX.writeFile(wb, `KehoachTuan_${state.week}.xlsx`);
   }
 
+
+  async function exportDashboardPdf(){
+    try{
+      if(typeof html2canvas!=="function" || !(window.jspdf && window.jspdf.jsPDF)){
+        alert("Thiếu thư viện xuất PDF Dashboard. Hãy tải lại trang rồi thử lại.");
+        return;
+      }
+      if(!viewDashboard) return;
+
+      const oldView=state.view;
+      if(oldView!=="dashboard") setView("dashboard");
+
+      const btn = btnDashPdf;
+      const oldText = btn ? btn.textContent : "";
+      if(btn){ btn.disabled=true; btn.textContent="Đang tạo PDF..."; }
+
+      await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,180)));
+
+      const target=viewDashboard;
+      const canvas=await html2canvas(target,{
+        scale:2,
+        useCORS:true,
+        allowTaint:true,
+        backgroundColor:"#f5f7f6",
+        width: Math.max(target.scrollWidth, target.offsetWidth),
+        height: Math.max(target.scrollHeight, target.offsetHeight),
+        windowWidth: Math.max(document.documentElement.clientWidth, target.scrollWidth),
+        windowHeight: Math.max(document.documentElement.clientHeight, target.scrollHeight),
+        scrollX: 0,
+        scrollY: -window.scrollY
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf=new jsPDF("l","mm","a4");
+      const pageWidth=pdf.internal.pageSize.getWidth();
+      const pageHeight=pdf.internal.pageSize.getHeight();
+      const margin=8;
+      const usableWidth=pageWidth-margin*2;
+      const usableHeight=pageHeight-margin*2;
+      const imgData=canvas.toDataURL("image/png");
+      const imgWidth=usableWidth;
+      const imgHeight=canvas.height*imgWidth/canvas.width;
+
+      let heightLeft=imgHeight;
+      let position=margin;
+      pdf.addImage(imgData,"PNG",margin,position,imgWidth,imgHeight,undefined,"FAST");
+      heightLeft -= usableHeight;
+      while(heightLeft>0){
+        position = margin - (imgHeight - heightLeft);
+        pdf.addPage("a4","l");
+        pdf.addImage(imgData,"PNG",margin,position,imgWidth,imgHeight,undefined,"FAST");
+        heightLeft -= usableHeight;
+      }
+      pdf.save(`Dashboard_${state.week}.pdf`);
+
+      if(btn){ btn.disabled=false; btn.textContent=oldText || "Xuất PDF Dashboard"; }
+      if(oldView!=="dashboard") setView(oldView);
+    }catch(e){
+      console.error(e);
+      if(btnDashPdf){ btnDashPdf.disabled=false; btnDashPdf.textContent="Xuất PDF Dashboard"; }
+      alert("Không xuất được PDF Dashboard: " + (e && e.message ? e.message : e));
+    }
+  }
+
   
 
   function fillReportModalSelects(){
@@ -2754,13 +2825,27 @@ const newLists={
     viewForecast.style.display = name==="forecast" ? "" : "none";
     if(viewReports) viewReports.style.display = name==="reports" ? "" : "none";
 
+    const isRep = name==="reports";
+    const isDash = name==="dashboard";
     if(btnAdd){
-      const isRep = name==="reports";
-      const isDash = name==="dashboard";
       btnAdd.textContent = isRep ? "+ Thêm báo cáo" : "+ Thêm việc";
       btnAdd.disabled = false;
       btnAdd.style.display = isDash ? "none" : "";
       btnAdd.title = isRep ? (isManager(state.meId) ? "Giao báo cáo" : "Chỉ quản lý mới giao báo cáo.") : "Thêm công việc";
+    }
+    if(btnAddFab){
+      btnAddFab.textContent = isRep ? "+" : "+";
+      const showFab = window.matchMedia("(max-width: 720px)").matches && !isDash;
+      btnAddFab.style.display = showFab ? "flex" : "none";
+      btnAddFab.title = isRep ? "Thêm báo cáo" : "Thêm việc";
+    }
+    if(btnDashPdf){
+      btnDashPdf.style.display = name==="dashboard" ? "" : "none";
+    }
+    if(btnAdd && window.matchMedia("(max-width: 720px)").matches){
+      btnAdd.style.display = name==="dashboard" ? "none" : "";
+    } else if(btnAdd){
+      btnAdd.style.display = "";
     }
     render();
   }
@@ -2801,6 +2886,7 @@ const newLists={
     elWeek.onchange=()=>{
       state.week = pickWeekStartISO(elWeek.value);
       elWeek.value = state.week;
+      updateWeekPickerDisplay();
       syncAll();
     };
 
@@ -2819,7 +2905,9 @@ const newLists={
     btnClear.onclick=()=>{ state.filterAssignee=""; state.filterStatus=""; state.filterGroup=""; state.onlyOverdue=false; clearDashboardTaskDrill(); filterOverdue.checked=false; render(); };
 
     btnAdd.onclick=()=>safeOpenAdd();
+    if(btnAddFab) btnAddFab.onclick=()=>safeOpenAdd();
     btnExport.onclick=()=>exportWeekly();
+    if(btnDashPdf) btnDashPdf.onclick=()=>exportDashboardPdf();
     btnLists.onclick=()=>openLists();
 
     // Safety: delegate click in case header button is overlaid / re-rendered
@@ -3061,12 +3149,13 @@ const newLists={
       else topbar.classList.remove("compact");
     };
     window.addEventListener("scroll", apply, {passive:true});
-    window.addEventListener("resize", apply);
+    window.addEventListener("resize", ()=>{ apply(); setView(state.view||"dashboard"); });
     apply();
   }
 
   function init(){
     elWeek.value = state.week;
+    updateWeekPickerDisplay();
     refreshDropdowns();
     setupTimer();
     wire();
